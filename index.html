@@ -66,7 +66,6 @@
             gap: 12px;
         }
 
-        /* Кнопка темы */
         #theme-toggle {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -223,7 +222,6 @@
         const isLight = document.body.classList.toggle('light-mode');
         themeIcon.className = isLight ? 'fas fa-sun' : 'fas fa-moon';
         
-        // Обновляем цвета текста на графиках
         const newColor = isLight ? '#64748b' : '#94a3b8';
         Object.values(charts).forEach(chart => {
             chart.options.scales.x.ticks.color = newColor;
@@ -242,7 +240,7 @@
 
     let history = { temp: [], hum: [], gas: [], times: [] };
     const MAX_POINTS = 20;
-    let lastUpdateTime = 0; // Для отслеживания 5-секундного интервала
+    let lastUpdateTime = 0;
 
     // --- Настройка графиков ---
     const createChart = (id, label, color) => {
@@ -281,9 +279,9 @@
     const charts = {
         temp: createChart('tempChart', 'Температура (°C)', '#fb7185'),
         hum: createChart('humChart', 'Влажность (%)', '#38bdf8'),
-        gas: createChart('gasChart', 'Газ (Raw)', '#34d399')
+        gas: createChart('gasChart', 'CO2 (ppm)', '#34d399') // Исправлено название
     };
-    // --- Математическая модель (Линейная регрессия) ---
+
     function predictValue(dataArray) {
         if (dataArray.length < 5) return null;
         const n = dataArray.length;
@@ -308,35 +306,40 @@
 
     client.onMessageArrived = (msg) => {
         const currentTime = Date.now();
-        // Игнорируем сообщения, если прошло меньше 5000 мс (5 сек)
         if (currentTime - lastUpdateTime < 5000) return;
         lastUpdateTime = currentTime;
 
-        const data = JSON.parse(msg.payloadString);
-        // Добавлены секунды в формат времени для наглядности интервала
-        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        try {
+            const data = JSON.parse(msg.payloadString);
+            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        document.getElementById('temp-val').innerText = data.temperature + " °C";
-        document.getElementById('hum-val').innerText = data.humidity + " %";
-        document.getElementById('gas-val').innerText = data.gas_raw || data.air;
+            // Обновляем текст (используем co2_ppm из ESP32)
+            document.getElementById('temp-val').innerText = data.temperature.toFixed(1) + " °C";
+            document.getElementById('hum-val').innerText = data.humidity.toFixed(1) + " %";
+            document.getElementById('gas-val').innerText = data.co2_ppm.toFixed(1) + " ppm";
 
-        history.temp.push(data.temperature);
-        history.hum.push(data.humidity);
-        history.gas.push(data.gas_raw || data.air);
-        history.times.push(now);
+            // Обновляем массивы истории
+            history.temp.push(data.temperature);
+            history.hum.push(data.humidity);
+            history.gas.push(data.co2_ppm); // Исправлено: берем правильный ключ
+            history.times.push(now);
 
-        if (history.temp.length > MAX_POINTS) {
-            history.temp.shift(); history.hum.shift(); history.gas.shift(); history.times.shift();
+            if (history.temp.length > MAX_POINTS) {
+                history.temp.shift(); history.hum.shift(); history.gas.shift(); history.times.shift();
+            }
+
+            // Обновляем графики
+            Object.keys(charts).forEach(key => {
+                charts[key].data.labels = history.times;
+                charts[key].data.datasets[0].data = history[key];
+                charts[key].update('none');
+
+                const pred = predictValue(history[key]);
+                if (pred) document.getElementById(`${key}-pred`).innerHTML = `<i class="fas fa-chart-line"></i> Прогноз: ${pred}`;
+            });
+        } catch (e) {
+            console.error("Ошибка обработки данных:", e);
         }
-
-        Object.keys(charts).forEach(key => {
-            charts[key].data.labels = history.times;
-            charts[key].data.datasets[0].data = history[key];
-            charts[key].update('none');
-
-            const pred = predictValue(history[key]);
-            if (pred) document.getElementById(`${key}-pred`).innerHTML = `<i class="fas fa-chart-line"></i> Прогноз: ${pred}`;
-        });
     };
 
     client.connect({
@@ -351,6 +354,5 @@
         useSSL: true
     });
 </script>
-
 </body>
 </html>
