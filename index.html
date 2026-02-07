@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Microclimate Dashboard</title>
+    <title>Microclimate Dashboard Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
@@ -11,19 +11,21 @@
     
     <style>
         :root {
-            /* Темная тема (по умолчанию) */
+            /* Темная тема */
             --bg-color: #0f172a;
             --card-bg: rgba(30, 41, 59, 0.7);
-            --accent-color: #38bdf8;
             --text-main: #f8fafc;
             --text-dim: #94a3b8;
-            --temp-color: #fb7185;
-            --hum-color: #38bdf8;
-            --gas-color: #34d399;
+            
+            /* Цвета сенсоров */
+            --temp-color: #fb7185; 
+            --hum-color: #38bdf8;  
+            --gas-color: #34d399;  
+            --lux-color: #facc15;  
+
             --border-color: rgba(255, 255, 255, 0.1);
         }
 
-        /* Светлая тема */
         body.light-mode {
             --bg-color: #f1f5f9;
             --card-bg: rgba(255, 255, 255, 0.8);
@@ -42,14 +44,9 @@
             transition: background 0.3s ease, color 0.3s ease;
         }
 
-        body.light-mode {
-            background: radial-gradient(circle at top left, #ffffff, var(--bg-color));
-        }
+        body.light-mode { background: radial-gradient(circle at top left, #ffffff, var(--bg-color)); }
 
-        .container {
-            max-width: 1100px;
-            margin: auto;
-        }
+        .container { max-width: 1200px; margin: auto; }
 
         header {
             display: flex;
@@ -60,116 +57,68 @@
             padding-bottom: 15px;
         }
 
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .header-actions { display: flex; align-items: center; gap: 12px; }
 
-        #theme-toggle {
+        .btn-icon {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             color: var(--text-main);
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 40px; height: 40px; border-radius: 10px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: 0.2s;
         }
-        #theme-toggle:hover { transform: scale(1.05); }
+        .btn-icon:hover { transform: scale(1.05); }
 
-        h1 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin: 0;
-            letter-spacing: -0.5px;
-        }
+        h1 { font-size: 1.5rem; font-weight: 600; margin: 0; }
 
         .status-badge {
-            display: flex;
-            align-items: center;
-            font-size: 0.85rem;
-            background: rgba(0,0,0,0.2);
-            padding: 5px 12px;
-            border-radius: 20px;
-            border: 1px solid var(--border-color);
+            display: flex; align-items: center; font-size: 0.85rem;
+            background: rgba(0,0,0,0.2); padding: 5px 12px;
+            border-radius: 20px; border: 1px solid var(--border-color);
         }
 
         .dot {
-            height: 8px;
-            width: 8px;
-            background-color: #f59e0b;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
+            height: 8px; width: 8px; background-color: #f59e0b;
+            border-radius: 50%; display: inline-block; margin-right: 8px;
             box-shadow: 0 0 10px #f59e0b;
         }
-
         .dot.online { background-color: #10b981; box-shadow: 0 0 10px #10b981; animation: pulse 2s infinite; }
         .dot.offline { background-color: #ef4444; box-shadow: 0 0 10px #ef4444; }
 
-        @keyframes pulse {
-            0% { transform: scale(0.95); opacity: 0.7; }
-            70% { transform: scale(1.1); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.7; }
-        }
+        @keyframes pulse { 0% { transform: scale(0.95); opacity: 0.7; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.7; } }
 
         .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px; margin-bottom: 30px;
         }
 
         .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 24px;
-            transition: transform 0.2s ease;
+            background: var(--card-bg); backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color); border-radius: 16px;
+            padding: 24px; transition: transform 0.2s ease;
         }
-
         .card:hover { transform: translateY(-5px); }
 
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15px;
-        }
-
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .card-title { font-size: 0.9rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
         .card-value { font-size: 2rem; font-weight: 600; margin: 5px 0; }
         .prediction { font-size: 0.8rem; color: var(--text-dim); }
 
-        .chart-card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 25px;
-            border: 1px solid var(--border-color);
-        }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .chart-card { background: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border-color); }
+        canvas { max-height: 250px; width: 100%; }
 
-        canvas { max-height: 250px; }
-
-        @media (max-width: 600px) {
-            body { padding: 10px; }
-            .cards-grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 800px) { .chart-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 600px) { body { padding: 10px; } .cards-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>IoT Monitor <span style="font-weight: 300; opacity: 0.6;">v1.0</span></h1>
+        <h1>IoT Monitor <span style="font-weight: 300; opacity: 0.6;">v1.5</span></h1>
         <div class="header-actions">
-            <button id="theme-toggle" title="Переключить тему">
+            <button id="theme-toggle" class="btn-icon" title="Переключить тему">
                 <i class="fas fa-moon" id="theme-icon"></i>
             </button>
             <div class="status-badge">
@@ -206,71 +155,60 @@
             <div class="card-value" id="gas-val">--</div>
             <div class="prediction" id="gas-pred"><i class="fas fa-chart-line"></i> Прогноз: --</div>
         </div>
+
+        <div class="card" style="border-left: 4px solid var(--lux-color);">
+            <div class="card-header">
+                <span class="card-title">Свет</span>
+                <i class="fas fa-sun" style="color: var(--lux-color);"></i>
+            </div>
+            <div class="card-value" id="lux-val">-- Lx</div>
+            <div class="prediction" id="lux-pred"><i class="fas fa-chart-line"></i> Прогноз: --</div>
+        </div>
     </div>
 
-    <div class="chart-card"><canvas id="tempChart"></canvas></div>
-    <div class="chart-card"><canvas id="humChart"></canvas></div>
-    <div class="chart-card"><canvas id="gasChart"></canvas></div>
+    <div class="chart-grid">
+        <div class="chart-card"><canvas id="tempChart"></canvas></div>
+        <div class="chart-card"><canvas id="humChart"></canvas></div>
+        <div class="chart-card"><canvas id="gasChart"></canvas></div>
+        <div class="chart-card"><canvas id="luxChart"></canvas></div>
+    </div>
 </div>
 
 <script>
-    // --- Логика смены темы ---
+    // --- Тема ---
     const themeBtn = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
-    
     themeBtn.addEventListener('click', () => {
         const isLight = document.body.classList.toggle('light-mode');
         themeIcon.className = isLight ? 'fas fa-sun' : 'fas fa-moon';
-        
         const newColor = isLight ? '#64748b' : '#94a3b8';
         Object.values(charts).forEach(chart => {
             chart.options.scales.x.ticks.color = newColor;
             chart.options.scales.y.ticks.color = newColor;
+            chart.options.plugins.legend.labels.color = newColor; // Цвет легенды
             chart.update('none');
         });
     });
 
-    // --- Конфигурация MQTT ---
-    const MQTT_HOST = "f5704478800f4f75a3ba3cded7ac3a96.s1.eu.hivemq.cloud";
-    const MQTT_PORT = 8884;
-    const MQTT_CLIENT_ID = "WebClient_" + Math.random().toString(16).substr(2, 8);
-    const MQTT_USER = "hivemq.webclient.1767520137503";
-    const MQTT_PASS = "Y*F72Mo,rm?Ac;3tn5BP";
-    const MQTT_TOPIC = "iot/microclimate/data";
-
-    let history = { temp: [], hum: [], gas: [], times: [] };
+    // --- Данные ---
+    let history = { temp: [], hum: [], gas: [], lux: [], times: [] };
     const MAX_POINTS = 20;
-    let lastUpdateTime = 0;
-
-    // --- Настройка графиков ---
+    
+    // --- Графики ---
     const createChart = (id, label, color) => {
         const ctx = document.getElementById(id).getContext('2d');
         const gradient = ctx.createLinearGradient(0, 0, 0, 250);
         gradient.addColorStop(0, color + '55');
         gradient.addColorStop(1, color + '00');
-
         return new Chart(ctx, {
             type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: label,
-                    data: [],
-                    borderColor: color,
-                    backgroundColor: gradient,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 2,
-                    borderWidth: 2
-                }]
-            },
+            data: { labels: [], datasets: [{ label: label, data: [], borderColor: color, backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2 }] },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
-                    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: true, labels: { color: '#94a3b8' } } },
+                scales: { 
+                    x: { ticks: { color: '#94a3b8' }, grid: { display: false } }, 
+                    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } } 
                 }
             }
         });
@@ -279,79 +217,94 @@
     const charts = {
         temp: createChart('tempChart', 'Температура (°C)', '#fb7185'),
         hum: createChart('humChart', 'Влажность (%)', '#38bdf8'),
-        gas: createChart('gasChart', 'CO2 (ppm)', '#34d399') // Исправлено название
+        gas: createChart('gasChart', 'CO2 (ppm)', '#34d399'),
+        lux: createChart('luxChart', 'Освещенность (Lux)', '#facc15')
     };
 
     function predictValue(dataArray) {
         if (dataArray.length < 5) return null;
         const n = dataArray.length;
         let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-        for (let i = 0; i < n; i++) {
-            sumX += i; sumY += dataArray[i];
-            sumXY += i * dataArray[i]; sumXX += i * i;
-        }
+        for (let i = 0; i < n; i++) { sumX += i; sumY += dataArray[i]; sumXY += i * dataArray[i]; sumXX += i * i; }
         const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
         const intercept = (sumY - slope * sumX) / n;
-        const prediction = slope * (n + 5) + intercept;
-        return prediction.toFixed(1);
+        return (slope * (n + 5) + intercept).toFixed(1);
     }
+
+    // --- ГЛАВНАЯ ФУНКЦИЯ ОБНОВЛЕНИЯ UI ---
+    function updateDashboardUI() {
+        // 1. Проверяем, есть ли данные
+        if (history.times.length === 0) return;
+
+        const lastIdx = history.times.length - 1;
+
+        // 2. Обновляем карточки
+        document.getElementById('temp-val').innerText = history.temp[lastIdx].toFixed(1) + " °C";
+        document.getElementById('hum-val').innerText = history.hum[lastIdx].toFixed(1) + " %";
+        document.getElementById('gas-val').innerText = history.gas[lastIdx].toFixed(0) + " ppm";
+        document.getElementById('lux-val').innerText = history.lux[lastIdx].toFixed(0) + " Lx";
+
+        // 3. Обновляем графики
+        Object.keys(charts).forEach(key => {
+            charts[key].data.labels = history.times;
+            charts[key].data.datasets[0].data = history[key];
+            charts[key].update(); // Перерисовываем
+            
+            // Обновляем прогноз
+            const pred = predictValue(history[key]);
+            const predEl = document.getElementById(`${key}-pred`);
+            if (pred && predEl) predEl.innerHTML = `<i class="fas fa-chart-line"></i> Прогноз: ${pred}`;
+        });
+    }
+
+    // --- MQTT ---
+    const MQTT_HOST = "f5704478800f4f75a3ba3cded7ac3a96.s1.eu.hivemq.cloud";
+    const MQTT_PORT = 8884;
+    const MQTT_CLIENT_ID = "WebClient_" + Math.random().toString(16).substr(2, 8);
+    const MQTT_USER = "hivemq.webclient.1767520137503";
+    const MQTT_PASS = "Y*F72Mo,rm?Ac;3tn5BP";
+    const MQTT_TOPIC = "iot/microclimate/data";
+    
+    let lastUpdateTime = 0;
 
     const client = new Paho.MQTT.Client(MQTT_HOST, Number(MQTT_PORT), MQTT_CLIENT_ID);
 
-    client.onConnectionLost = (resp) => {
-        const dot = document.getElementById('status-dot');
-        dot.className = "dot offline";
+    client.onConnectionLost = () => {
+        document.getElementById('status-dot').className = "dot offline";
         document.getElementById('status-text').innerText = "Ошибка сети";
     };
 
     client.onMessageArrived = (msg) => {
         const currentTime = Date.now();
-        if (currentTime - lastUpdateTime < 5000) return;
+        if (currentTime - lastUpdateTime < 2000) return;
         lastUpdateTime = currentTime;
 
         try {
             const data = JSON.parse(msg.payloadString);
             const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-            // Обновляем текст (используем co2_ppm из ESP32)
-            document.getElementById('temp-val').innerText = data.temperature.toFixed(1) + " °C";
-            document.getElementById('hum-val').innerText = data.humidity.toFixed(1) + " %";
-            document.getElementById('gas-val').innerText = data.co2_ppm.toFixed(1) + " ppm";
-
-            // Обновляем массивы истории
-            history.temp.push(data.temperature);
-            history.hum.push(data.humidity);
-            history.gas.push(data.co2_ppm); // Исправлено: берем правильный ключ
+            history.temp.push(data.temperature || 0);
+            history.hum.push(data.humidity || 0);
+            history.gas.push(data.co2_ppm || 0);
+            history.lux.push(data.illuminance !== undefined ? data.illuminance : (data.lux || 0));
             history.times.push(now);
 
             if (history.temp.length > MAX_POINTS) {
-                history.temp.shift(); history.hum.shift(); history.gas.shift(); history.times.shift();
+                Object.keys(history).forEach(key => history[key].shift());
             }
 
-            // Обновляем графики
-            Object.keys(charts).forEach(key => {
-                charts[key].data.labels = history.times;
-                charts[key].data.datasets[0].data = history[key];
-                charts[key].update('none');
+            updateDashboardUI();
 
-                const pred = predictValue(history[key]);
-                if (pred) document.getElementById(`${key}-pred`).innerHTML = `<i class="fas fa-chart-line"></i> Прогноз: ${pred}`;
-            });
-        } catch (e) {
-            console.error("Ошибка обработки данных:", e);
-        }
+        } catch (e) { console.error(e); }
     };
 
     client.connect({
         onSuccess: () => {
-            const dot = document.getElementById('status-dot');
-            dot.className = "dot online";
+            document.getElementById('status-dot').className = "dot online";
             document.getElementById('status-text').innerText = "Онлайн";
             client.subscribe(MQTT_TOPIC);
         },
-        userName: MQTT_USER,
-        password: MQTT_PASS,
-        useSSL: true
+        userName: MQTT_USER, password: MQTT_PASS, useSSL: true
     });
 </script>
 </body>
