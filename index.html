@@ -359,39 +359,6 @@
 </div>
 
 <script>
-    // --- Уведомления ---
-    let isNotificationActive = false; // Флаг, чтобы не дублировать уведомления
-
-    function requestNotificationPermission() {
-        if ("Notification" in window) {
-            Notification.requestPermission().then(permission => {
-                console.log("Статус уведомлений:", permission);
-            });
-        }
-    }
-
-    function showPushNotification(title, body) {
-        if (Notification.permission === "granted") {
-            navigator.serviceWorker.ready.then(registration => {
-                registration.showNotification(title, {
-                    body: body,
-                    icon: 'icon-192.png',
-                    vibrate: [200, 100, 200],
-                    tag: 'iot-alert', // Тег позволяет заменять старое уведомление новым
-                    renotify: true
-                });
-            });
-        }
-    }
-
-    // Запрашиваем права при загрузке
-    window.addEventListener('load', () => {
-        requestNotificationPermission();
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(console.error);
-        }
-    });
-
     // --- Инициализация кругов SVG ---
     const radius = 60;
     const circumference = 2 * Math.PI * radius;
@@ -403,20 +370,24 @@
 
     function setGauge(id, value, max) {
         const circle = document.getElementById(`ring-${id}`);
+        // Ограничиваем процент от 0 до 100
         const percent = Math.min(Math.max((value / max), 0), 1);
         const offset = circumference - (percent * circumference);
         circle.style.strokeDashoffset = offset;
     }
 
     // --- Настройки и Пороги (Local Storage) ---
+    // Значения по умолчанию для масштаба круга (визуализация)
     const MAX_VALUES = { temp: 50, hum: 100, gas: 2000, co: 100, lux: 1000 };
     
+    // Значения порогов тревоги (из настроек или дефолт)
     let ALERTS = JSON.parse(localStorage.getItem('iot_alerts')) || {
         temp: 35,
         gas: 1200,
         co: 30
     };
 
+    // UI Модального окна
     const modal = document.getElementById('settings-modal');
     const btnSettings = document.getElementById('settings-btn');
     const btnClose = document.getElementById('close-settings');
@@ -442,7 +413,7 @@
         
         localStorage.setItem('iot_alerts', JSON.stringify(ALERTS));
         modal.style.display = 'none';
-        updateDashboardUI();
+        updateDashboardUI(); // Сразу применить новые пороги
     });
 
     // --- Тема ---
@@ -527,40 +498,41 @@
         let hasAlert = false;
         let alertMessages = [];
 
+        // Проверка Температуры
         if (currentValues.temp > ALERTS.temp) {
             cards.temp.classList.add('danger');
-            hasAlert = true; alertMessages.push(`Температура ${currentValues.temp}°C`);
+            hasAlert = true;
+            alertMessages.push(`Температура ${currentValues.temp}°C`);
         } else { cards.temp.classList.remove('danger'); }
 
+        // Проверка CO2
         if (currentValues.gas > ALERTS.gas) {
             cards.gas.classList.add('danger');
-            hasAlert = true; alertMessages.push(`CO2 ${currentValues.gas} ppm`);
+            hasAlert = true;
+            alertMessages.push(`CO2 ${currentValues.gas} ppm`);
         } else { cards.gas.classList.remove('danger'); }
 
+        // Проверка CO
         if (currentValues.co > ALERTS.co) {
             cards.co.classList.add('danger');
-            hasAlert = true; alertMessages.push(`CO ${currentValues.co} ppm`);
+            hasAlert = true;
+            alertMessages.push(`CO ${currentValues.co} ppm`);
         } else { cards.co.classList.remove('danger'); }
 
+        // Показать общий баннер
         if (hasAlert) {
             alertBox.style.display = 'block';
-            const msg = "ПРЕВЫШЕНИЕ: " + alertMessages.join(', ');
-            document.getElementById('alert-msg').innerText = msg;
-            
-            // Если тревога только что сработала (не была активна), шлем пуш
-            if (!isNotificationActive) {
-                showPushNotification("Критическое состояние!", msg);
-                isNotificationActive = true;
-            }
+            document.getElementById('alert-msg').innerText = "ПРЕВЫШЕНИЕ: " + alertMessages.join(', ');
         } else {
             alertBox.style.display = 'none';
-            isNotificationActive = false; // Сбрасываем флаг, когда все пришло в норму
         }
     }
 
+    // --- Обновление UI ---
     function updateDashboardUI() {
         if (history.times.length === 0) return;
         const lastIdx = history.times.length - 1;
+
         const values = {
             temp: history.temp[lastIdx],
             hum: history.hum[lastIdx],
@@ -569,23 +541,31 @@
             lux: history.lux[lastIdx]
         };
 
+        // Обновляем текст и круги
         document.getElementById('val-temp').innerText = values.temp.toFixed(1);
         setGauge('temp', values.temp, MAX_VALUES.temp);
+
         document.getElementById('val-hum').innerText = values.hum.toFixed(0);
         setGauge('hum', values.hum, MAX_VALUES.hum);
+
         document.getElementById('val-gas').innerText = values.gas.toFixed(0);
         setGauge('gas', values.gas, MAX_VALUES.gas);
+
         document.getElementById('val-co').innerText = values.co.toFixed(1);
         setGauge('co', values.co, MAX_VALUES.co);
+
         document.getElementById('val-lux').innerText = values.lux.toFixed(0);
         setGauge('lux', values.lux, MAX_VALUES.lux);
 
+        // Проверяем тревоги
         checkAlerts(values);
 
+        // Графики и прогнозы
         Object.keys(charts).forEach(key => {
             charts[key].data.labels = history.times;
             charts[key].data.datasets[0].data = history[key];
             charts[key].update();
+            
             const pred = predictValue(history[key]);
             const predEl = document.getElementById(`pred-${key}`);
             if (pred && predEl) {
@@ -615,18 +595,22 @@
         const currentTime = Date.now();
         if (currentTime - lastUpdateTime < 2000) return;
         lastUpdateTime = currentTime;
+
         try {
             const data = JSON.parse(msg.payloadString);
             const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
             history.temp.push(data.temperature || 0);
             history.hum.push(data.humidity || 0);
             history.gas.push(data.co2_ppm || 0);
             history.co.push(data.co_ppm || 0); 
             history.lux.push(data.illuminance !== undefined ? data.illuminance : (data.lux || 0));
             history.times.push(now);
+
             if (history.times.length > MAX_POINTS) {
                 Object.keys(history).forEach(key => history[key].shift());
             }
+
             updateDashboardUI();
         } catch (e) { console.error(e); }
     };
