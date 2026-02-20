@@ -7,7 +7,6 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(clients.claim());
 });
 
-// Слушаем команду от основного скрипта
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SHOW_ALERT') {
         const { title, message, icon } = event.data;
@@ -16,21 +15,28 @@ self.addEventListener('message', (event) => {
             body: message,
             icon: icon || 'https://cdn-icons-png.flaticon.com/512/565/565547.png',
             badge: icon || 'https://cdn-icons-png.flaticon.com/512/565/565547.png',
-            vibrate: [300, 100, 300, 100, 300], // Интенсивная вибрация
-            tag: 'critical-alert', // Тег позволяет заменять старое уведомление новым
-            renotify: true,        // Заставляет телефон вибрировать/звенеть при каждом обновлении
-            requireInteraction: true, // Уведомление не исчезнет, пока пользователь не смахнет его
+            
+            // Вибрация — ключ к звуку на Android
+            // [пауза, вибрация, пауза, вибрация]
+            vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 500],
+            
+            tag: 'critical-alert-v3', 
+            renotify: true,        // Обязательно! Заставляет телефон реагировать заново
+            silent: false,         // Прямое указание системе не молчать
+            requireInteraction: true, 
+            
             data: { url: self.location.origin },
             actions: [
-                { action: 'open', title: 'Открыть монитор' }
+                { action: 'open', title: 'Срочно проверить' }
             ]
         };
 
-        self.registration.showNotification(title, options);
+        event.waitUntil(
+            self.registration.showNotification(title, options)
+        );
     }
 });
 
-// Обработка клика
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     event.waitUntil(
