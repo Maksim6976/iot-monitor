@@ -555,7 +555,7 @@
         for (let i = 0; i < n; i++) { sumX += i; sumY += dataArray[i]; sumXY += i * dataArray[i]; sumXX += i * i; }
         const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
         const intercept = (sumY - slope * sumX) / n;
-        return (slope * (n + 5) + intercept).toFixed(1);
+        return (slope * (n + 60) + intercept).toFixed(1);
     }
 
     function checkAlerts(currentValues) {
@@ -702,4 +702,5 @@
 </script>
 </body>
 </html>
+
 
