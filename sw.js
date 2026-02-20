@@ -1,44 +1,42 @@
-const CACHE_NAME = 'iot-monitor-v3-push';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  'https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js',
-  'https://cdn.jsdelivr.net/npm/chart.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
-];
-
-// Установка Service Worker и кеширование ресурсов
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
-  );
+// sw.js
+self.addEventListener('install', (event) => {
+    self.skipWaiting();
 });
 
-// Работа в офлайне
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => response || fetch(event.request))
-  );
+self.addEventListener('activate', (event) => {
+    event.waitUntil(clients.claim());
 });
 
-// ОБРАБОТКА КЛИКА ПО УВЕДОМЛЕНИЮ
-self.addEventListener('notificationclick', event => {
-  event.notification.close(); // Закрываем пуш
+// Слушаем команду от основного скрипта
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SHOW_ALERT') {
+        const { title, message, icon } = event.data;
+        
+        const options = {
+            body: message,
+            icon: icon || 'https://cdn-icons-png.flaticon.com/512/565/565547.png',
+            badge: icon || 'https://cdn-icons-png.flaticon.com/512/565/565547.png',
+            vibrate: [300, 100, 300, 100, 300], // Интенсивная вибрация
+            tag: 'critical-alert', // Тег позволяет заменять старое уведомление новым
+            renotify: true,        // Заставляет телефон вибрировать/звенеть при каждом обновлении
+            requireInteraction: true, // Уведомление не исчезнет, пока пользователь не смахнет его
+            data: { url: self.location.origin },
+            actions: [
+                { action: 'open', title: 'Открыть монитор' }
+            ]
+        };
 
-  // Пытаемся найти открытое окно приложения и сфокусироваться на нем
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url === '/' || client.url.includes('index.html')) {
-          return client.focus();
-        }
-      }
-      // Если окно не найдено, открываем новое
-      if (clients.openWindow) {
-        return clients.openWindow('/');
-      }
-    })
-  );
+        self.registration.showNotification(title, options);
+    }
+});
+
+// Обработка клика
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+            if (clientList.length > 0) return clientList[0].focus();
+            return clients.openWindow('/');
+        })
+    );
 });
