@@ -432,24 +432,30 @@
         updateNotifUI();
     });
 
-    function sendPushNotification(title, message) {
-        const now = Date.now();
-        if (!notificationsEnabled || (now - lastPushTime < PUSH_COOLDOWN)) return;
+   function sendPush(title, message) {
+    const now = Date.now();
+    // Ограничение: не чаще чем раз в 30 секунд для одного типа
+    if (!notificationsEnabled || (now - lastPushTime < 30000)) return;
 
-        if (Notification.permission === 'granted') {
-            lastPushTime = now;
-            // Используем ServiceWorker для отправки, чтобы работало и в фоне
-            navigator.serviceWorker.ready.then(registration => {
-                registration.showNotification(title, {
-                    body: message,
-                    icon: 'icon-192.png',
-                    badge: 'icon-192.png',
-                    vibrate: [200, 100, 200],
-                    tag: 'iot-alert'
-                });
+    if (Notification.permission === 'granted') {
+        lastPushTime = now;
+        
+        // Отправляем команду в Service Worker
+        if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+                type: 'SHOW_ALERT',
+                title: title,
+                message: message,
+                icon: 'https://cdn-icons-png.flaticon.com/512/565/565547.png'
+            });
+        } else {
+            // Резервный вариант, если SW еще не под контролем
+            navigator.serviceWorker.ready.then(reg => {
+                reg.showNotification(title, { body: message });
             });
         }
     }
+}
 
     // UI Модального окна
     const modal = document.getElementById('settings-modal');
@@ -696,3 +702,4 @@
 </script>
 </body>
 </html>
+
