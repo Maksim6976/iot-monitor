@@ -77,10 +77,17 @@
             cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
+            position: relative;
         }
         .btn-icon:hover { 
             transform: scale(1.1); border-color: var(--hover-border);
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        /* Стиль для активного колокольчика */
+        .btn-icon.active {
+            color: var(--lux-color);
+            border-color: var(--lux-color);
         }
 
         h1 { font-size: 1.5rem; font-weight: 600; margin: 0; }
@@ -214,6 +221,9 @@
     <header>
         <h1>IoT Monitor <span style="font-weight: 300; opacity: 0.6; font-size: 1.1rem;">v3.0 Circular</span></h1>
         <div class="header-actions">
+            <button id="notif-btn" class="btn-icon" title="Включить пуш-уведомления">
+                <i class="fas fa-bell-slash" id="notif-icon"></i>
+            </button>
             <button id="settings-btn" class="btn-icon" title="Настройки порогов">
                 <i class="fas fa-sliders-h"></i>
             </button>
@@ -377,15 +387,69 @@
     }
 
     // --- Настройки и Пороги (Local Storage) ---
-    // Значения по умолчанию для масштаба круга (визуализация)
     const MAX_VALUES = { temp: 50, hum: 100, gas: 2000, co: 100, lux: 1000 };
     
-    // Значения порогов тревоги (из настроек или дефолт)
     let ALERTS = JSON.parse(localStorage.getItem('iot_alerts')) || {
         temp: 35,
         gas: 1200,
         co: 30
     };
+
+    // --- Пуш Уведомления ---
+    let notificationsEnabled = localStorage.getItem('notif_enabled') === 'true';
+    let lastPushTime = 0; // Для предотвращения спама уведомлениями
+    const PUSH_COOLDOWN = 60000; // 1 минута между пушами
+
+    const notifBtn = document.getElementById('notif-btn');
+    const notifIcon = document.getElementById('notif-icon');
+
+    function updateNotifUI() {
+        if (notificationsEnabled) {
+            notifIcon.className = 'fas fa-bell';
+            notifBtn.classList.add('active');
+            notifBtn.title = "Уведомления включены";
+        } else {
+            notifIcon.className = 'fas fa-bell-slash';
+            notifBtn.classList.remove('active');
+            notifBtn.title = "Уведомления выключены";
+        }
+    }
+    updateNotifUI();
+
+    notifBtn.addEventListener('click', async () => {
+        if (!notificationsEnabled) {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                notificationsEnabled = true;
+                alert('Уведомления активированы!');
+            } else {
+                alert('Доступ к уведомлениям отклонен пользователем.');
+            }
+        } else {
+            notificationsEnabled = false;
+        }
+        localStorage.setItem('notif_enabled', notificationsEnabled);
+        updateNotifUI();
+    });
+
+    function sendPushNotification(title, message) {
+        const now = Date.now();
+        if (!notificationsEnabled || (now - lastPushTime < PUSH_COOLDOWN)) return;
+
+        if (Notification.permission === 'granted') {
+            lastPushTime = now;
+            // Используем ServiceWorker для отправки, чтобы работало и в фоне
+            navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification(title, {
+                    body: message,
+                    icon: 'icon-192.png',
+                    badge: 'icon-192.png',
+                    vibrate: [200, 100, 200],
+                    tag: 'iot-alert'
+                });
+            });
+        }
+    }
 
     // UI Модального окна
     const modal = document.getElementById('settings-modal');
@@ -413,7 +477,7 @@
         
         localStorage.setItem('iot_alerts', JSON.stringify(ALERTS));
         modal.style.display = 'none';
-        updateDashboardUI(); // Сразу применить новые пороги
+        updateDashboardUI();
     });
 
     // --- Тема ---
@@ -498,31 +562,31 @@
         let hasAlert = false;
         let alertMessages = [];
 
-        // Проверка Температуры
         if (currentValues.temp > ALERTS.temp) {
             cards.temp.classList.add('danger');
             hasAlert = true;
             alertMessages.push(`Температура ${currentValues.temp}°C`);
         } else { cards.temp.classList.remove('danger'); }
 
-        // Проверка CO2
         if (currentValues.gas > ALERTS.gas) {
             cards.gas.classList.add('danger');
             hasAlert = true;
             alertMessages.push(`CO2 ${currentValues.gas} ppm`);
         } else { cards.gas.classList.remove('danger'); }
 
-        // Проверка CO
         if (currentValues.co > ALERTS.co) {
             cards.co.classList.add('danger');
             hasAlert = true;
             alertMessages.push(`CO ${currentValues.co} ppm`);
         } else { cards.co.classList.remove('danger'); }
 
-        // Показать общий баннер
         if (hasAlert) {
             alertBox.style.display = 'block';
-            document.getElementById('alert-msg').innerText = "ПРЕВЫШЕНИЕ: " + alertMessages.join(', ');
+            const msg = "ПРЕВЫШЕНИЕ: " + alertMessages.join(', ');
+            document.getElementById('alert-msg').innerText = msg;
+            
+            // Отправка ПУШ-уведомления
+            sendPushNotification("Тревога микроклимата!", msg);
         } else {
             alertBox.style.display = 'none';
         }
@@ -541,7 +605,6 @@
             lux: history.lux[lastIdx]
         };
 
-        // Обновляем текст и круги
         document.getElementById('val-temp').innerText = values.temp.toFixed(1);
         setGauge('temp', values.temp, MAX_VALUES.temp);
 
@@ -557,10 +620,8 @@
         document.getElementById('val-lux').innerText = values.lux.toFixed(0);
         setGauge('lux', values.lux, MAX_VALUES.lux);
 
-        // Проверяем тревоги
         checkAlerts(values);
 
-        // Графики и прогнозы
         Object.keys(charts).forEach(key => {
             charts[key].data.labels = history.times;
             charts[key].data.datasets[0].data = history[key];
@@ -623,6 +684,15 @@
         },
         userName: MQTT_USER, password: MQTT_PASS, useSSL: true
     });
+
+    // Регистрация Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').then(reg => {
+                console.log('SW зарегистрирован', reg);
+            });
+        });
+    }
 </script>
 </body>
 </html>
