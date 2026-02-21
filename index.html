@@ -182,6 +182,7 @@
         }
         .modal {
             background: var(--modal-bg); width: 90%; max-width: 450px;
+            max-height: 90vh; overflow-y: auto; /* Добавлена прокрутка для большого кол-ва полей */
             padding: 30px; border-radius: 24px; border: 1px solid var(--border-color);
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -189,8 +190,12 @@
         @keyframes modalPop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         
         .modal h2 { margin-top: 0; margin-bottom: 20px; font-size: 1.4rem; display: flex; align-items: center; gap: 10px; }
+        
+        .input-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .input-row .input-group { flex: 1; margin-bottom: 0; }
+        
         .input-group { margin-bottom: 15px; }
-        .input-group label { display: block; font-size: 0.9rem; color: var(--text-dim); margin-bottom: 5px; }
+        .input-group label { display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 5px; }
         .input-group input {
             width: 100%; padding: 10px; border-radius: 8px;
             background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
@@ -204,6 +209,11 @@
         .btn-cancel { background: transparent; color: var(--text-dim); border: 1px solid var(--border-color); }
         .btn-save { background: var(--hum-color); color: #0f172a; }
         .btn:hover { opacity: 0.9; transform: translateY(-2px); }
+
+        /* Кастомный скроллбар для модалки */
+        .modal::-webkit-scrollbar { width: 6px; }
+        .modal::-webkit-scrollbar-track { background: transparent; }
+        .modal::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; }
 
         @media (max-width: 800px) { .chart-grid { grid-template-columns: 1fr; } }
     </style>
@@ -336,19 +346,62 @@
     <div class="modal">
         <h2><i class="fas fa-bell"></i> Настройка порогов</h2>
         <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 20px;">
-            Укажите максимальные безопасные значения. При превышении блок загорится красным.
+            Укажите минимальные и максимальные безопасные значения. При выходе за эти рамки блок загорится красным.
         </p>
-        <div class="input-group">
-            <label>Температура Макс (°C)</label>
-            <input type="number" id="set-temp" value="30">
+
+        <div class="input-row">
+            <div class="input-group">
+                <label>Темп. Мин (°C)</label>
+                <input type="number" id="set-temp-min" value="10">
+            </div>
+            <div class="input-group">
+                <label>Темп. Макс (°C)</label>
+                <input type="number" id="set-temp-max" value="30">
+            </div>
         </div>
-        <div class="input-group">
-            <label>CO2 Макс (ppm)</label>
-            <input type="number" id="set-gas" value="1000">
+
+        <div class="input-row">
+            <div class="input-group">
+                <label>Влажность Мин (%)</label>
+                <input type="number" id="set-hum-min" value="20">
+            </div>
+            <div class="input-group">
+                <label>Влажность Макс (%)</label>
+                <input type="number" id="set-hum-max" value="80">
+            </div>
         </div>
-        <div class="input-group">
-            <label>Угарный газ CO Макс (ppm)</label>
-            <input type="number" id="set-co" value="30">
+
+        <div class="input-row">
+            <div class="input-group">
+                <label>CO2 Мин (ppm)</label>
+                <input type="number" id="set-gas-min" value="0">
+            </div>
+            <div class="input-group">
+                <label>CO2 Макс (ppm)</label>
+                <input type="number" id="set-gas-max" value="1000">
+            </div>
+        </div>
+
+        <div class="input-row">
+            <div class="input-group">
+                <label>CO Мин (ppm)</label>
+                <input type="number" id="set-co-min" value="0">
+            </div>
+            <div class="input-group">
+                <label>CO Макс (ppm)</label>
+                <input type="number" id="set-co-max" value="30">
+            </div>
+        </div>
+
+        <div class="input-row">
+            <div class="input-group">
+                <label>Освещ. Мин (Lux)</label>
+                <input type="number" id="set-lux-min" value="0">
+            </div>
+            <div class="input-group">
+                <label>Освещ. Макс (Lux)</label>
+                <input type="number" id="set-lux-max" value="2000">
+            </div>
         </div>
         
         <div class="modal-actions">
@@ -381,10 +434,13 @@
     const MAX_VALUES = { temp: 50, hum: 100, gas: 2000, co: 100, lux: 1000 };
     
     // Значения порогов тревоги (из настроек или дефолт)
-    let ALERTS = JSON.parse(localStorage.getItem('iot_alerts')) || {
-        temp: 35,
-        gas: 1200,
-        co: 30
+    // Используем новый ключ v3 чтобы старые данные не вызвали ошибку
+    let ALERTS = JSON.parse(localStorage.getItem('iot_alerts_v3')) || {
+        temp: { min: 10, max: 35 },
+        hum: { min: 20, max: 80 },
+        gas: { min: 0, max: 1200 },
+        co: { min: 0, max: 30 },
+        lux: { min: 50, max: 2000 }
     };
 
     // UI Модального окна
@@ -394,9 +450,16 @@
     const btnSave = document.getElementById('save-settings');
 
     function loadSettingsToInputs() {
-        document.getElementById('set-temp').value = ALERTS.temp;
-        document.getElementById('set-gas').value = ALERTS.gas;
-        document.getElementById('set-co').value = ALERTS.co;
+        document.getElementById('set-temp-min').value = ALERTS.temp.min;
+        document.getElementById('set-temp-max').value = ALERTS.temp.max;
+        document.getElementById('set-hum-min').value = ALERTS.hum.min;
+        document.getElementById('set-hum-max').value = ALERTS.hum.max;
+        document.getElementById('set-gas-min').value = ALERTS.gas.min;
+        document.getElementById('set-gas-max').value = ALERTS.gas.max;
+        document.getElementById('set-co-min').value = ALERTS.co.min;
+        document.getElementById('set-co-max').value = ALERTS.co.max;
+        document.getElementById('set-lux-min').value = ALERTS.lux.min;
+        document.getElementById('set-lux-max').value = ALERTS.lux.max;
     }
 
     btnSettings.addEventListener('click', () => {
@@ -407,11 +470,22 @@
     btnClose.addEventListener('click', () => modal.style.display = 'none');
     
     btnSave.addEventListener('click', () => {
-        ALERTS.temp = parseFloat(document.getElementById('set-temp').value);
-        ALERTS.gas = parseFloat(document.getElementById('set-gas').value);
-        ALERTS.co = parseFloat(document.getElementById('set-co').value);
+        ALERTS.temp.min = parseFloat(document.getElementById('set-temp-min').value);
+        ALERTS.temp.max = parseFloat(document.getElementById('set-temp-max').value);
         
-        localStorage.setItem('iot_alerts', JSON.stringify(ALERTS));
+        ALERTS.hum.min = parseFloat(document.getElementById('set-hum-min').value);
+        ALERTS.hum.max = parseFloat(document.getElementById('set-hum-max').value);
+        
+        ALERTS.gas.min = parseFloat(document.getElementById('set-gas-min').value);
+        ALERTS.gas.max = parseFloat(document.getElementById('set-gas-max').value);
+        
+        ALERTS.co.min = parseFloat(document.getElementById('set-co-min').value);
+        ALERTS.co.max = parseFloat(document.getElementById('set-co-max').value);
+        
+        ALERTS.lux.min = parseFloat(document.getElementById('set-lux-min').value);
+        ALERTS.lux.max = parseFloat(document.getElementById('set-lux-max').value);
+        
+        localStorage.setItem('iot_alerts_v3', JSON.stringify(ALERTS));
         modal.style.display = 'none';
         updateDashboardUI(); // Сразу применить новые пороги
     });
@@ -491,38 +565,43 @@
     function checkAlerts(currentValues) {
         const cards = {
             temp: document.getElementById('card-temp'),
-            gas: document.getElementById('card-gas'),
-            co: document.getElementById('card-co')
+            hum:  document.getElementById('card-hum'),
+            gas:  document.getElementById('card-gas'),
+            co:   document.getElementById('card-co'),
+            lux:  document.getElementById('card-lux')
         };
         const alertBox = document.getElementById('global-alert');
         let hasAlert = false;
         let alertMessages = [];
 
-        // Проверка Температуры
-        if (currentValues.temp > ALERTS.temp) {
-            cards.temp.classList.add('danger');
-            hasAlert = true;
-            alertMessages.push(`Температура ${currentValues.temp}°C`);
-        } else { cards.temp.classList.remove('danger'); }
+        // Вспомогательная функция для проверки одного сенсора
+        const checkLimits = (key, name, unit) => {
+            const val = currentValues[key];
+            const limits = ALERTS[key];
+            
+            if (val < limits.min) {
+                cards[key].classList.add('danger');
+                hasAlert = true;
+                alertMessages.push(`${name} слишком низкая (${val} ${unit})`);
+            } else if (val > limits.max) {
+                cards[key].classList.add('danger');
+                hasAlert = true;
+                alertMessages.push(`${name} превышен (${val} ${unit})`);
+            } else {
+                cards[key].classList.remove('danger');
+            }
+        };
 
-        // Проверка CO2
-        if (currentValues.gas > ALERTS.gas) {
-            cards.gas.classList.add('danger');
-            hasAlert = true;
-            alertMessages.push(`CO2 ${currentValues.gas} ppm`);
-        } else { cards.gas.classList.remove('danger'); }
-
-        // Проверка CO
-        if (currentValues.co > ALERTS.co) {
-            cards.co.classList.add('danger');
-            hasAlert = true;
-            alertMessages.push(`CO ${currentValues.co} ppm`);
-        } else { cards.co.classList.remove('danger'); }
+        checkLimits('temp', 'Температура', '°C');
+        checkLimits('hum', 'Влажность', '%');
+        checkLimits('gas', 'CO2', 'ppm');
+        checkLimits('co', 'CO', 'ppm');
+        checkLimits('lux', 'Освещенность', 'Lx');
 
         // Показать общий баннер
         if (hasAlert) {
             alertBox.style.display = 'block';
-            document.getElementById('alert-msg').innerText = "ПРЕВЫШЕНИЕ: " + alertMessages.join(', ');
+            document.getElementById('alert-msg').innerText = "ВНИМАНИЕ: " + alertMessages.join(' | ');
         } else {
             alertBox.style.display = 'none';
         }
