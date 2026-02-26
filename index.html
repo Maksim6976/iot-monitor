@@ -29,7 +29,6 @@
             --temp-color: #fb7185; 
             --hum-color: #38bdf8;  
             --gas-color: #34d399;  
-            --lux-color: #facc15;  
             --co-color: #a855f7;
             --danger-color: #ef4444;
 
@@ -182,7 +181,7 @@
         }
         .modal {
             background: var(--modal-bg); width: 90%; max-width: 450px;
-            max-height: 90vh; overflow-y: auto; /* Добавлена прокрутка для большого кол-ва полей */
+            max-height: 90vh; overflow-y: auto; 
             padding: 30px; border-radius: 24px; border: 1px solid var(--border-color);
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -210,7 +209,6 @@
         .btn-save { background: var(--hum-color); color: #0f172a; }
         .btn:hover { opacity: 0.9; transform: translateY(-2px); }
 
-        /* Кастомный скроллбар для модалки */
         .modal::-webkit-scrollbar { width: 6px; }
         .modal::-webkit-scrollbar-track { background: transparent; }
         .modal::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; }
@@ -313,24 +311,6 @@
                 <div class="gauge-prediction" id="pred-co">Анализ...</div>
             </div>
         </div>
-
-        <div class="gauge-card" id="card-lux">
-            <div class="gauge-wrapper">
-                <svg class="progress-ring" width="140" height="140">
-                    <circle class="progress-ring__bg" stroke-width="8" fill="transparent" r="60" cx="70" cy="70"/>
-                    <circle class="progress-ring__circle" id="ring-lux" stroke-width="8" fill="transparent" r="60" cx="70" cy="70" style="stroke: var(--lux-color);"/>
-                </svg>
-                <div class="gauge-center">
-                    <i class="fas fa-sun gauge-icon" style="color: var(--lux-color);"></i>
-                    <div class="gauge-value" id="val-lux">--</div>
-                    <div class="gauge-unit">Lux</div>
-                </div>
-            </div>
-            <div class="gauge-info">
-                <div class="gauge-title">Освещенность</div>
-                <div class="gauge-prediction" id="pred-lux">Анализ...</div>
-            </div>
-        </div>
     </div>
 
     <div class="chart-grid">
@@ -338,7 +318,6 @@
         <div class="chart-card"><canvas id="humChart"></canvas></div>
         <div class="chart-card"><canvas id="gasChart"></canvas></div>
         <div class="chart-card"><canvas id="coChart"></canvas></div>
-        <div class="chart-card"><canvas id="luxChart"></canvas></div>
     </div>
 </div>
 
@@ -392,17 +371,6 @@
                 <input type="number" id="set-co-max" value="30">
             </div>
         </div>
-
-        <div class="input-row">
-            <div class="input-group">
-                <label>Освещ. Мин (Lux)</label>
-                <input type="number" id="set-lux-min" value="0">
-            </div>
-            <div class="input-group">
-                <label>Освещ. Макс (Lux)</label>
-                <input type="number" id="set-lux-max" value="2000">
-            </div>
-        </div>
         
         <div class="modal-actions">
             <button class="btn btn-cancel" id="close-settings">Отмена</button>
@@ -431,7 +399,7 @@
 
     // --- Настройки и Пороги (Local Storage) ---
     // Значения по умолчанию для масштаба круга (визуализация)
-    const MAX_VALUES = { temp: 50, hum: 100, gas: 2000, co: 100, lux: 1000 };
+    const MAX_VALUES = { temp: 50, hum: 100, gas: 2000, co: 100 };
     
     // Значения порогов тревоги (из настроек или дефолт)
     // Используем новый ключ v3 чтобы старые данные не вызвали ошибку
@@ -439,8 +407,7 @@
         temp: { min: 10, max: 35 },
         hum: { min: 20, max: 80 },
         gas: { min: 0, max: 1200 },
-        co: { min: 0, max: 30 },
-        lux: { min: 50, max: 2000 }
+        co: { min: 0, max: 30 }
     };
 
     // UI Модального окна
@@ -458,8 +425,6 @@
         document.getElementById('set-gas-max').value = ALERTS.gas.max;
         document.getElementById('set-co-min').value = ALERTS.co.min;
         document.getElementById('set-co-max').value = ALERTS.co.max;
-        document.getElementById('set-lux-min').value = ALERTS.lux.min;
-        document.getElementById('set-lux-max').value = ALERTS.lux.max;
     }
 
     btnSettings.addEventListener('click', () => {
@@ -481,9 +446,6 @@
         
         ALERTS.co.min = parseFloat(document.getElementById('set-co-min').value);
         ALERTS.co.max = parseFloat(document.getElementById('set-co-max').value);
-        
-        ALERTS.lux.min = parseFloat(document.getElementById('set-lux-min').value);
-        ALERTS.lux.max = parseFloat(document.getElementById('set-lux-max').value);
         
         localStorage.setItem('iot_alerts_v3', JSON.stringify(ALERTS));
         modal.style.display = 'none';
@@ -512,7 +474,7 @@
     }
 
     // --- Данные ---
-    let history = { temp: [], hum: [], gas: [], co: [], lux: [], times: [] };
+    let history = { temp: [], hum: [], gas: [], co: [], times: [] };
     const MAX_POINTS = 20;
 
     // --- Графики ---
@@ -548,8 +510,7 @@
         temp: createChart('tempChart', 'Температура (°C)', '#fb7185'),
         hum: createChart('humChart', 'Влажность (%)', '#38bdf8'),
         gas: createChart('gasChart', 'CO2 (ppm)', '#34d399'),
-        co: createChart('coChart', 'Угарный газ (ppm)', '#a855f7'),
-        lux: createChart('luxChart', 'Освещенность (Lx)', '#facc15')
+        co: createChart('coChart', 'Угарный газ (ppm)', '#a855f7')
     };
 
     function predictValue(dataArray) {
@@ -567,8 +528,7 @@
             temp: document.getElementById('card-temp'),
             hum:  document.getElementById('card-hum'),
             gas:  document.getElementById('card-gas'),
-            co:   document.getElementById('card-co'),
-            lux:  document.getElementById('card-lux')
+            co:   document.getElementById('card-co')
         };
         const alertBox = document.getElementById('global-alert');
         let hasAlert = false;
@@ -596,7 +556,6 @@
         checkLimits('hum', 'Влажность', '%');
         checkLimits('gas', 'CO2', 'ppm');
         checkLimits('co', 'CO', 'ppm');
-        checkLimits('lux', 'Освещенность', 'Lx');
 
         // Показать общий баннер
         if (hasAlert) {
@@ -616,8 +575,7 @@
             temp: history.temp[lastIdx],
             hum: history.hum[lastIdx],
             gas: history.gas[lastIdx],
-            co: history.co[lastIdx],
-            lux: history.lux[lastIdx]
+            co: history.co[lastIdx]
         };
 
         // Обновляем текст и круги
@@ -632,9 +590,6 @@
 
         document.getElementById('val-co').innerText = values.co.toFixed(1);
         setGauge('co', values.co, MAX_VALUES.co);
-
-        document.getElementById('val-lux').innerText = values.lux.toFixed(0);
-        setGauge('lux', values.lux, MAX_VALUES.lux);
 
         // Проверяем тревоги
         checkAlerts(values);
@@ -683,7 +638,6 @@
             history.hum.push(data.humidity || 0);
             history.gas.push(data.co2_ppm || 0);
             history.co.push(data.co_ppm || 0); 
-            history.lux.push(data.illuminance !== undefined ? data.illuminance : (data.lux || 0));
             history.times.push(now);
 
             if (history.times.length > MAX_POINTS) {
@@ -705,4 +659,3 @@
 </script>
 </body>
 </html>
-
