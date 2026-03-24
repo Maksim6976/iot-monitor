@@ -3,20 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Microclimate Dashboard Pro v3.0</title>
+    <title>Microclimate Dashboard Pro v4.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="manifest" href="manifest.json">
 
-    <meta name="theme-color" content="#36a2eb">
-
-    <link rel="apple-touch-icon" href="icon-192.png"> 
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    
     <style>
         :root {
             /* Темная тема */
@@ -65,28 +57,38 @@
         header {
             display: flex; justify-content: space-between; align-items: center;
             margin-bottom: 30px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;
+            flex-wrap: wrap; gap: 15px;
         }
-        .header-actions { display: flex; align-items: center; gap: 12px; }
+        .header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;}
 
         .btn-icon {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             color: var(--text-main);
-            width: 40px; height: 40px; border-radius: 12px;
+            height: 40px; border-radius: 12px;
             cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
         }
+        button.btn-icon { width: 40px; }
         .btn-icon:hover { 
-            transform: scale(1.1); border-color: var(--hover-border);
+            transform: scale(1.05); border-color: var(--hover-border);
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
+        
+        select.btn-icon {
+            padding: 0 15px; font-family: 'Inter'; font-weight: 600; outline: none; appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat; background-position: right 10px center; background-size: 1em;
+            padding-right: 35px;
+        }
+        select.btn-icon option { background: var(--bg-color); color: var(--text-main); }
 
         h1 { font-size: 1.5rem; font-weight: 600; margin: 0; }
         .status-badge {
             display: flex; align-items: center; font-size: 0.85rem;
-            background: var(--card-bg); padding: 8px 16px;
-            border-radius: 20px; border: 1px solid var(--border-color);
+            background: var(--card-bg); padding: 8px 16px; height: 40px; box-sizing: border-box;
+            border-radius: 12px; border: 1px solid var(--border-color);
             backdrop-filter: blur(10px);
         }
         .dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 10px; }
@@ -123,7 +125,6 @@
         }
         .gauge-card:hover { transform: translateY(-5px); border-color: var(--hover-border); }
         
-        /* Danger State for Card */
         .gauge-card.danger {
             border-color: var(--danger-color);
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
@@ -137,22 +138,18 @@
 
         /* SVG Circular Progress */
         .gauge-wrapper {
-            position: relative;
-            width: 140px; height: 140px;
-            margin-bottom: 15px;
+            position: relative; width: 140px; height: 140px; margin-bottom: 15px;
         }
         .progress-ring__circle {
             transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-            transform: rotate(-90deg);
-            transform-origin: 50% 50%;
+            transform: rotate(-90deg); transform-origin: 50% 50%;
         }
         .progress-ring__bg { stroke: rgba(255, 255, 255, 0.1); }
         body.light-mode .progress-ring__bg { stroke: rgba(0, 0, 0, 0.05); }
 
         .gauge-center {
             position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
+            transform: translate(-50%, -50%); text-align: center;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .gauge-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
@@ -176,8 +173,7 @@
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.7); z-index: 1000;
-            backdrop-filter: blur(5px);
-            align-items: center; justify-content: center;
+            backdrop-filter: blur(5px); align-items: center; justify-content: center;
         }
         .modal {
             background: var(--modal-bg); width: 90%; max-width: 450px;
@@ -189,17 +185,14 @@
         @keyframes modalPop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         
         .modal h2 { margin-top: 0; margin-bottom: 20px; font-size: 1.4rem; display: flex; align-items: center; gap: 10px; }
-        
         .input-row { display: flex; gap: 10px; margin-bottom: 15px; }
         .input-row .input-group { flex: 1; margin-bottom: 0; }
-        
         .input-group { margin-bottom: 15px; }
         .input-group label { display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 5px; }
         .input-group input {
             width: 100%; padding: 10px; border-radius: 8px;
             background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
-            color: var(--text-main); font-family: 'Inter'; font-size: 1rem;
-            box-sizing: border-box;
+            color: var(--text-main); font-family: 'Inter'; font-size: 1rem; box-sizing: border-box;
         }
         .input-group input:focus { outline: none; border-color: var(--hum-color); }
         
@@ -220,8 +213,13 @@
 
 <div class="container">
     <header>
-        <h1>IoT Monitor <span style="font-weight: 300; opacity: 0.6; font-size: 1.1rem;">v3.0 Circular</span></h1>
+        <h1>IoT Monitor <span style="font-weight: 300; opacity: 0.6; font-size: 1.1rem;">v4.0 Auto-Discovery</span></h1>
         <div class="header-actions">
+            
+            <select id="station-selector" class="btn-icon" title="Выбрать станцию">
+                <option value="">Поиск станций...</option>
+            </select>
+
             <button id="settings-btn" class="btn-icon" title="Настройки порогов">
                 <i class="fas fa-sliders-h"></i>
             </button>
@@ -254,7 +252,7 @@
             </div>
             <div class="gauge-info">
                 <div class="gauge-title">Температура</div>
-                <div class="gauge-prediction" id="pred-temp">Анализ...</div>
+                <div class="gauge-prediction" id="pred-temp">Ожидание...</div>
             </div>
         </div>
 
@@ -272,7 +270,7 @@
             </div>
             <div class="gauge-info">
                 <div class="gauge-title">Влажность</div>
-                <div class="gauge-prediction" id="pred-hum">Анализ...</div>
+                <div class="gauge-prediction" id="pred-hum">Ожидание...</div>
             </div>
         </div>
 
@@ -290,7 +288,7 @@
             </div>
             <div class="gauge-info">
                 <div class="gauge-title">Качество воздуха</div>
-                <div class="gauge-prediction" id="pred-gas">Анализ...</div>
+                <div class="gauge-prediction" id="pred-gas">Ожидание...</div>
             </div>
         </div>
 
@@ -308,7 +306,7 @@
             </div>
             <div class="gauge-info">
                 <div class="gauge-title">Угарный газ</div>
-                <div class="gauge-prediction" id="pred-co">Анализ...</div>
+                <div class="gauge-prediction" id="pred-co">Ожидание...</div>
             </div>
         </div>
     </div>
@@ -391,18 +389,14 @@
 
     function setGauge(id, value, max) {
         const circle = document.getElementById(`ring-${id}`);
-        // Ограничиваем процент от 0 до 100
         const percent = Math.min(Math.max((value / max), 0), 1);
         const offset = circumference - (percent * circumference);
         circle.style.strokeDashoffset = offset;
     }
 
-    // --- Настройки и Пороги (Local Storage) ---
-    // Значения по умолчанию для масштаба круга (визуализация)
+    // --- Настройки и Пороги ---
     const MAX_VALUES = { temp: 50, hum: 100, gas: 2000, co: 100 };
     
-    // Значения порогов тревоги (из настроек или дефолт)
-    // Используем новый ключ v3 чтобы старые данные не вызвали ошибку
     let ALERTS = JSON.parse(localStorage.getItem('iot_alerts_v3')) || {
         temp: { min: 10, max: 35 },
         hum: { min: 20, max: 80 },
@@ -427,29 +421,22 @@
         document.getElementById('set-co-max').value = ALERTS.co.max;
     }
 
-    btnSettings.addEventListener('click', () => {
-        loadSettingsToInputs();
-        modal.style.display = 'flex';
-    });
-
+    btnSettings.addEventListener('click', () => { loadSettingsToInputs(); modal.style.display = 'flex'; });
     btnClose.addEventListener('click', () => modal.style.display = 'none');
     
     btnSave.addEventListener('click', () => {
         ALERTS.temp.min = parseFloat(document.getElementById('set-temp-min').value);
         ALERTS.temp.max = parseFloat(document.getElementById('set-temp-max').value);
-        
         ALERTS.hum.min = parseFloat(document.getElementById('set-hum-min').value);
         ALERTS.hum.max = parseFloat(document.getElementById('set-hum-max').value);
-        
         ALERTS.gas.min = parseFloat(document.getElementById('set-gas-min').value);
         ALERTS.gas.max = parseFloat(document.getElementById('set-gas-max').value);
-        
         ALERTS.co.min = parseFloat(document.getElementById('set-co-min').value);
         ALERTS.co.max = parseFloat(document.getElementById('set-co-max').value);
         
         localStorage.setItem('iot_alerts_v3', JSON.stringify(ALERTS));
         modal.style.display = 'none';
-        updateDashboardUI(); // Сразу применить новые пороги
+        updateDashboardUI(); 
     });
 
     // --- Тема ---
@@ -524,82 +511,48 @@
     }
 
     function checkAlerts(currentValues) {
-        const cards = {
-            temp: document.getElementById('card-temp'),
-            hum:  document.getElementById('card-hum'),
-            gas:  document.getElementById('card-gas'),
-            co:   document.getElementById('card-co')
-        };
+        const cards = { temp: document.getElementById('card-temp'), hum: document.getElementById('card-hum'), gas: document.getElementById('card-gas'), co: document.getElementById('card-co') };
         const alertBox = document.getElementById('global-alert');
         let hasAlert = false;
         let alertMessages = [];
 
-        // Вспомогательная функция для проверки одного сенсора
         const checkLimits = (key, name, unit) => {
             const val = currentValues[key];
             const limits = ALERTS[key];
-            
             if (val < limits.min) {
                 cards[key].classList.add('danger');
-                hasAlert = true;
-                alertMessages.push(`${name} слишком низкая (${val} ${unit})`);
+                hasAlert = true; alertMessages.push(`${name} низкая (${val} ${unit})`);
             } else if (val > limits.max) {
                 cards[key].classList.add('danger');
-                hasAlert = true;
-                alertMessages.push(`${name} превышен (${val} ${unit})`);
-            } else {
-                cards[key].classList.remove('danger');
-            }
+                hasAlert = true; alertMessages.push(`${name} превышен (${val} ${unit})`);
+            } else { cards[key].classList.remove('danger'); }
         };
 
-        checkLimits('temp', 'Температура', '°C');
-        checkLimits('hum', 'Влажность', '%');
-        checkLimits('gas', 'CO2', 'ppm');
-        checkLimits('co', 'CO', 'ppm');
+        checkLimits('temp', 'Температура', '°C'); checkLimits('hum', 'Влажность', '%');
+        checkLimits('gas', 'CO2', 'ppm'); checkLimits('co', 'CO', 'ppm');
 
-        // Показать общий баннер
         if (hasAlert) {
             alertBox.style.display = 'block';
             document.getElementById('alert-msg').innerText = "ВНИМАНИЕ: " + alertMessages.join(' | ');
-        } else {
-            alertBox.style.display = 'none';
-        }
+        } else { alertBox.style.display = 'none'; }
     }
 
-    // --- Обновление UI ---
     function updateDashboardUI() {
         if (history.times.length === 0) return;
         const lastIdx = history.times.length - 1;
+        const values = { temp: history.temp[lastIdx], hum: history.hum[lastIdx], gas: history.gas[lastIdx], co: history.co[lastIdx] };
 
-        const values = {
-            temp: history.temp[lastIdx],
-            hum: history.hum[lastIdx],
-            gas: history.gas[lastIdx],
-            co: history.co[lastIdx]
-        };
+        document.getElementById('val-temp').innerText = values.temp.toFixed(1); setGauge('temp', values.temp, MAX_VALUES.temp);
+        document.getElementById('val-hum').innerText = values.hum.toFixed(0); setGauge('hum', values.hum, MAX_VALUES.hum);
+        document.getElementById('val-gas').innerText = values.gas.toFixed(0); setGauge('gas', values.gas, MAX_VALUES.gas);
+        document.getElementById('val-co').innerText = values.co.toFixed(1); setGauge('co', values.co, MAX_VALUES.co);
 
-        // Обновляем текст и круги
-        document.getElementById('val-temp').innerText = values.temp.toFixed(1);
-        setGauge('temp', values.temp, MAX_VALUES.temp);
-
-        document.getElementById('val-hum').innerText = values.hum.toFixed(0);
-        setGauge('hum', values.hum, MAX_VALUES.hum);
-
-        document.getElementById('val-gas').innerText = values.gas.toFixed(0);
-        setGauge('gas', values.gas, MAX_VALUES.gas);
-
-        document.getElementById('val-co').innerText = values.co.toFixed(1);
-        setGauge('co', values.co, MAX_VALUES.co);
-
-        // Проверяем тревоги
         checkAlerts(values);
 
-        // Графики и прогнозы
         Object.keys(charts).forEach(key => {
             charts[key].data.labels = history.times;
             charts[key].data.datasets[0].data = history[key];
             charts[key].update();
-            
             const pred = predictValue(history[key]);
             const predEl = document.getElementById(`pred-${key}`);
             if (pred && predEl) {
@@ -609,23 +562,107 @@
         });
     }
 
-    // --- MQTT ---
+    // --- MQTT & AUTO-DISCOVERY LOGIC ---
     const MQTT_HOST = "f5704478800f4f75a3ba3cded7ac3a96.s1.eu.hivemq.cloud";
     const MQTT_PORT = 8884;
     const MQTT_CLIENT_ID = "WebClient_Pro_" + Math.random().toString(16).substr(2, 8);
     const MQTT_USER = "hivemq.webclient.1771392995052";
     const MQTT_PASS = "e0QH15i6Y#AXv.wtR!%z";
-    const MQTT_TOPIC = "iot/microclimate/data4";
     
+    const DISCOVERY_TOPIC = "iot/microclimate/discovery";
+    
+    // Загружаем найденные станции из LocalStorage
+    let stations = JSON.parse(localStorage.getItem('iot_discovered_stations')) || {};
+    const stationSelector = document.getElementById('station-selector');
+    let currentTopic = localStorage.getItem('iot_last_topic') || "";
+
+    // Отрисовка списка станций в UI
+    function renderStationList() {
+        stationSelector.innerHTML = '';
+        const keys = Object.keys(stations);
+        
+        if (keys.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = "";
+            opt.innerText = "Поиск станций...";
+            stationSelector.appendChild(opt);
+        } else {
+            keys.forEach(topic => {
+                const opt = document.createElement('option');
+                opt.value = topic;
+                opt.innerText = stations[topic];
+                stationSelector.appendChild(opt);
+            });
+            
+            // Если текущего топика нет или он недействителен, выбираем первый доступный
+            if (!currentTopic || !stations[currentTopic]) {
+                currentTopic = keys[0];
+                localStorage.setItem('iot_last_topic', currentTopic);
+            }
+            stationSelector.value = currentTopic;
+        }
+    }
+
+    // Первичная отрисовка селектора при загрузке страницы
+    renderStationList();
+
+    let isConnected = false;
     let lastUpdateTime = 0;
     const client = new Paho.MQTT.Client(MQTT_HOST, Number(MQTT_PORT), MQTT_CLIENT_ID);
 
-    client.onConnectionLost = () => {
+    function connectMQTT() {
+        client.connect({
+            onSuccess: () => {
+                isConnected = true;
+                document.getElementById('status-dot').className = "dot online";
+                document.getElementById('status-text').innerText = "Онлайн";
+                
+                // Подписываемся на топик знакомств
+                client.subscribe(DISCOVERY_TOPIC);
+                
+                // Подписываемся на текущую станцию, если она уже выбрана
+                if (currentTopic) {
+                    client.subscribe(currentTopic);
+                }
+            },
+            userName: MQTT_USER, password: MQTT_PASS, useSSL: true
+        });
+    }
+
+    client.onConnectionLost = (responseObject) => {
+        isConnected = false;
         document.getElementById('status-dot').className = "dot offline";
         document.getElementById('status-text').innerText = "Ошибка сети";
     };
 
     client.onMessageArrived = (msg) => {
+        // Логика Автообнаружения (сообщения от "discovery")
+        if (msg.destinationName === DISCOVERY_TOPIC) {
+            try {
+                const info = JSON.parse(msg.payloadString);
+                if (info.topic && info.name) {
+                    // Если нашли новую станцию или она поменяла имя
+                    if (stations[info.topic] !== info.name) {
+                        stations[info.topic] = info.name;
+                        localStorage.setItem('iot_discovered_stations', JSON.stringify(stations));
+                        renderStationList();
+                        
+                        // Если это первая найденная станция, сразу переключаемся на нее
+                        if (!currentTopic) {
+                            currentTopic = info.topic;
+                            localStorage.setItem('iot_last_topic', currentTopic);
+                            renderStationList();
+                            if (isConnected) client.subscribe(currentTopic);
+                        }
+                    }
+                }
+            } catch(e) { console.error("Discovery parse error:", e); }
+            return; // Выходим из функции, это была "визитка", а не данные сенсоров
+        }
+
+        // Логика обработки данных сенсоров (Игнорируем чужие топики)
+        if (msg.destinationName !== currentTopic) return;
+
         const currentTime = Date.now();
         if (currentTime - lastUpdateTime < 2000) return;
         lastUpdateTime = currentTime;
@@ -645,17 +682,56 @@
             }
 
             updateDashboardUI();
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Sensor data parse error:", e); }
     };
 
-    client.connect({
-        onSuccess: () => {
-            document.getElementById('status-dot').className = "dot online";
-            document.getElementById('status-text').innerText = "Онлайн";
-            client.subscribe(MQTT_TOPIC);
-        },
-        userName: MQTT_USER, password: MQTT_PASS, useSSL: true
+    // Слушатель ручного изменения станции в выпадающем списке
+    stationSelector.addEventListener('change', (e) => {
+        if (!e.target.value) return;
+        
+        const oldTopic = currentTopic;
+        currentTopic = e.target.value;
+        localStorage.setItem('iot_last_topic', currentTopic);
+
+        // Отписываемся от старой станции
+        if (isConnected && oldTopic) {
+            client.unsubscribe(oldTopic);
+        }
+
+        // Очищаем историю данных в памяти
+        history = { temp: [], hum: [], gas: [], co: [], times: [] };
+        
+        // Сбрасываем значения на карточках
+        document.getElementById('val-temp').innerText = "--";
+        document.getElementById('val-hum').innerText = "--";
+        document.getElementById('val-gas').innerText = "--";
+        document.getElementById('val-co').innerText = "--";
+        setGauge('temp', 0, MAX_VALUES.temp); setGauge('hum', 0, MAX_VALUES.hum);
+        setGauge('gas', 0, MAX_VALUES.gas); setGauge('co', 0, MAX_VALUES.co);
+        document.getElementById('global-alert').style.display = 'none';
+        
+        Object.keys(MAX_VALUES).forEach(key => {
+            const card = document.getElementById(`card-${key}`);
+            if(card) card.classList.remove('danger');
+        });
+
+        // Очищаем графики
+        Object.keys(charts).forEach(key => {
+            charts[key].data.labels = [];
+            charts[key].data.datasets[0].data = [];
+            charts[key].update();
+            const predEl = document.getElementById(`pred-${key}`);
+            if (predEl) predEl.innerText = "Ожидание данных...";
+        });
+
+        // Подписываемся на новую станцию
+        if (isConnected) {
+            client.subscribe(currentTopic);
+        }
     });
+
+    // Запускаем подключение при открытии страницы
+    connectMQTT();
 </script>
 </body>
 </html>
