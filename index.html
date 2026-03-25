@@ -217,13 +217,27 @@
 
 <div class="container">
     <header>
-        <h1>IoT Monitor <span style="font-weight: 300; opacity: 0.6; font-size: 1.1rem;">v4.0 Auto-Discovery</span></h1>
+        <h1>IoT Monitor <span style="font-weight: 300; opacity: 0.6; font-size: 1.1rem;">v4.0 Unique ID</span></h1>
         <div class="header-actions">
             
+            <input type="text" id="new-station-id" placeholder="ID: A1B2C3D4..." class="btn-icon" style="width: 140px; padding: 0 12px; text-align: left;" maxlength="12">
+            <button id="add-station-btn" class="btn-icon" title="Добавить станцию по ID">
+                <i class="fas fa-plus"></i>
+            </button>
+
             <select id="station-selector" class="btn-icon" title="Выбрать станцию">
-                <option value="">Поиск станций...</option>
+                <option value="">Мои станции...</option>
+            </select>
+              <select id="station-selector" class="btn-icon" title="Выбрать станцию">
+                <option value="">Мои станции...</option>
             </select>
 
+            <button id="edit-station-btn" class="btn-icon" title="Переименовать станцию" style="display: none;">
+                <i class="fas fa-pen"></i>
+            </button>
+            <button id="delete-station-btn" class="btn-icon" title="Удалить станцию" style="display: none;">
+                <i class="fas fa-trash" style="color: #ef4444;"></i>
+            </button>
             <button id="settings-btn" class="btn-icon" title="Настройки порогов">
                 <i class="fas fa-sliders-h"></i>
             </button>
@@ -566,21 +580,26 @@
         });
     }
 
-    // --- MQTT & AUTO-DISCOVERY LOGIC ---
+    // --- MQTT & UNIQUE ID CONNECTION LOGIC ---
     const MQTT_HOST = "f5704478800f4f75a3ba3cded7ac3a96.s1.eu.hivemq.cloud";
     const MQTT_PORT = 8884;
     const MQTT_CLIENT_ID = "WebClient_Pro_" + Math.random().toString(16).substr(2, 8);
     const MQTT_USER = "hivemq.webclient.1771392995052";
     const MQTT_PASS = "e0QH15i6Y#AXv.wtR!%z";
-    
-    const DISCOVERY_TOPIC = "iot/microclimate/discovery";
-    
-    // Загружаем найденные станции из LocalStorage
-    let stations = JSON.parse(localStorage.getItem('iot_discovered_stations')) || {};
+
+    // Локальное хранилище добавленных станций { "iot/microclimate/ID": "Имя станции" }
+    let stations = JSON.parse(localStorage.getItem('iot_saved_stations')) || {};
     const stationSelector = document.getElementById('station-selector');
+    const stationIdInput = document.getElementById('new-station-id');
+    const addStationBtn = document.getElementById('add-station-btn');
     let currentTopic = localStorage.getItem('iot_last_topic') || "";
 
-    // Отрисовка списка станций в UI
+    // Отрисовка сохраненных станций в выпадающем списке
+    // Получаем ссылки на новые кнопки
+    const editStationBtn = document.getElementById('edit-station-btn');
+    const deleteStationBtn = document.getElementById('delete-station-btn');
+
+    // Отрисовка сохраненных станций в выпадающем списке
     function renderStationList() {
         stationSelector.innerHTML = '';
         const keys = Object.keys(stations);
@@ -588,8 +607,12 @@
         if (keys.length === 0) {
             const opt = document.createElement('option');
             opt.value = "";
-            opt.innerText = "Поиск станций...";
+            opt.innerText = "Добавьте станцию...";
             stationSelector.appendChild(opt);
+            
+            // Прячем кнопки, если станций нет
+            editStationBtn.style.display = 'none';
+            deleteStationBtn.style.display = 'none';
         } else {
             keys.forEach(topic => {
                 const opt = document.createElement('option');
@@ -598,16 +621,18 @@
                 stationSelector.appendChild(opt);
             });
             
-            // Если текущего топика нет или он недействителен, выбираем первый доступный
             if (!currentTopic || !stations[currentTopic]) {
                 currentTopic = keys[0];
                 localStorage.setItem('iot_last_topic', currentTopic);
             }
             stationSelector.value = currentTopic;
+            
+            // Показываем кнопки
+            editStationBtn.style.display = 'flex';
+            deleteStationBtn.style.display = 'flex';
         }
     }
 
-    // Первичная отрисовка селектора при загрузке страницы
     renderStationList();
 
     let isConnected = false;
@@ -621,15 +646,17 @@
                 document.getElementById('status-dot').className = "dot online";
                 document.getElementById('status-text').innerText = "Онлайн";
                 
-                // Подписываемся на топик знакомств
-                client.subscribe(DISCOVERY_TOPIC);
-                
-                // Подписываемся на текущую станцию, если она уже выбрана
+                // Подписываемся на выбранную станцию
                 if (currentTopic) {
                     client.subscribe(currentTopic);
                 }
             },
-            userName: MQTT_USER, password: MQTT_PASS, useSSL: true
+            userName: MQTT_USER, password: MQTT_PASS, useSSL: true,
+            onFailure: () => {
+                isConnected = false;
+                document.getElementById('status-dot').className = "dot offline";
+                document.getElementById('status-text').innerText = "Ошибка авторизации";
+            }
         });
     }
 
@@ -637,34 +664,10 @@
         isConnected = false;
         document.getElementById('status-dot').className = "dot offline";
         document.getElementById('status-text').innerText = "Ошибка сети";
+        setTimeout(connectMQTT, 5000); // Попытка переподключиться
     };
 
     client.onMessageArrived = (msg) => {
-        // Логика Автообнаружения (сообщения от "discovery")
-        if (msg.destinationName === DISCOVERY_TOPIC) {
-            try {
-                const info = JSON.parse(msg.payloadString);
-                if (info.topic && info.name) {
-                    // Если нашли новую станцию или она поменяла имя
-                    if (stations[info.topic] !== info.name) {
-                        stations[info.topic] = info.name;
-                        localStorage.setItem('iot_discovered_stations', JSON.stringify(stations));
-                        renderStationList();
-                        
-                        // Если это первая найденная станция, сразу переключаемся на нее
-                        if (!currentTopic) {
-                            currentTopic = info.topic;
-                            localStorage.setItem('iot_last_topic', currentTopic);
-                            renderStationList();
-                            if (isConnected) client.subscribe(currentTopic);
-                        }
-                    }
-                }
-            } catch(e) { console.error("Discovery parse error:", e); }
-            return; // Выходим из функции, это была "визитка", а не данные сенсоров
-        }
-
-        // Логика обработки данных сенсоров (Игнорируем чужие топики)
         if (msg.destinationName !== currentTopic) return;
 
         const currentTime = Date.now();
@@ -689,29 +692,29 @@
         } catch (e) { console.error("Sensor data parse error:", e); }
     };
 
-    // Слушатель ручного изменения станции в выпадающем списке
-    stationSelector.addEventListener('change', (e) => {
-        if (!e.target.value) return;
-        
+    // Функция переключения между станциями (сброс истории и экранов)
+    function switchStation(newTopic) {
         const oldTopic = currentTopic;
-        currentTopic = e.target.value;
+        currentTopic = newTopic;
         localStorage.setItem('iot_last_topic', currentTopic);
+        stationSelector.value = currentTopic;
 
-        // Отписываемся от старой станции
         if (isConnected && oldTopic) {
             client.unsubscribe(oldTopic);
         }
 
-        // Очищаем историю данных в памяти
+        // Очищаем историю графиков
         history = { temp: [], hum: [], gas: [], co: [], times: [] };
         
-        // Сбрасываем значения на карточках
+        // Сбрасываем UI на прочерки
         document.getElementById('val-temp').innerText = "--";
         document.getElementById('val-hum').innerText = "--";
         document.getElementById('val-gas').innerText = "--";
         document.getElementById('val-co').innerText = "--";
-        setGauge('temp', 0, MAX_VALUES.temp); setGauge('hum', 0, MAX_VALUES.hum);
-        setGauge('gas', 0, MAX_VALUES.gas); setGauge('co', 0, MAX_VALUES.co);
+        setGauge('temp', 0, MAX_VALUES.temp); 
+        setGauge('hum', 0, MAX_VALUES.hum);
+        setGauge('gas', 0, MAX_VALUES.gas); 
+        setGauge('co', 0, MAX_VALUES.co);
         document.getElementById('global-alert').style.display = 'none';
         
         Object.keys(MAX_VALUES).forEach(key => {
@@ -719,7 +722,6 @@
             if(card) card.classList.remove('danger');
         });
 
-        // Очищаем графики
         Object.keys(charts).forEach(key => {
             charts[key].data.labels = [];
             charts[key].data.datasets[0].data = [];
@@ -728,13 +730,76 @@
             if (predEl) predEl.innerText = "Ожидание данных...";
         });
 
-        // Подписываемся на новую станцию
-        if (isConnected) {
+        if (isConnected && currentTopic) {
             client.subscribe(currentTopic);
+        }
+    }
+
+    // Кнопка "+" в хеддере для добавления станции по ID
+    addStationBtn.addEventListener('click', () => {
+        const id = stationIdInput.value.trim().toUpperCase();
+        if (!id) return;
+
+        const topic = "iot/microclimate/" + id;
+
+        if (!stations[topic]) {
+            const name = prompt(`Введите имя для устройства ${id}:`, `Станция ${id}`);
+            if (name) {
+                stations[topic] = name;
+                localStorage.setItem('iot_saved_stations', JSON.stringify(stations));
+                stationIdInput.value = "";
+                renderStationList();
+                switchStation(topic);
+            }
+        } else {
+            alert("Эта станция уже добавлена!");
+            stationIdInput.value = "";
+            switchStation(topic);
         }
     });
 
-    // Запускаем подключение при открытии страницы
+    // Обработка ручной смены в списке
+    stationSelector.addEventListener('change', (e) => {
+        if (!e.target.value) return;
+        switchStation(e.target.value);
+    });
+// --- ПЕРЕИМЕНОВАНИЕ СТАНЦИИ ---
+    editStationBtn.addEventListener('click', () => {
+        if (!currentTopic || !stations[currentTopic]) return;
+        
+        const currentName = stations[currentTopic];
+        const newName = prompt("Введите новое имя для этой станции:", currentName);
+        
+        if (newName && newName.trim() !== "" && newName !== currentName) {
+            stations[currentTopic] = newName.trim();
+            localStorage.setItem('iot_saved_stations', JSON.stringify(stations));
+            renderStationList(); // Обновляем текст в селекторе
+        }
+    });
+
+    // --- УДАЛЕНИЕ СТАНЦИИ ---
+    deleteStationBtn.addEventListener('click', () => {
+        if (!currentTopic || !stations[currentTopic]) return;
+        
+        const confirmDelete = confirm(`Вы уверены, что хотите удалить станцию "${stations[currentTopic]}"?`);
+        
+        if (confirmDelete) {
+            // 1. Отписываемся от брокера, чтобы данные перестали идти
+            if (isConnected) client.unsubscribe(currentTopic);
+            
+            // 2. Удаляем из памяти
+            delete stations[currentTopic];
+            localStorage.setItem('iot_saved_stations', JSON.stringify(stations));
+            
+            // 3. Выбираем оставшуюся станцию (или пустоту, если удалили последнюю)
+            const remainingKeys = Object.keys(stations);
+            const nextTopic = remainingKeys.length > 0 ? remainingKeys[0] : "";
+            
+            // 4. Обновляем UI
+            renderStationList();
+            switchStation(nextTopic); 
+        }
+    });
     connectMQTT();
 </script>
 </body>
