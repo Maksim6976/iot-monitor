@@ -5,18 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microclimate Dashboard Pro v4.0</title>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0f172a"> 
-    <link rel="apple-touch-icon" href="icon-192.png"> 
+    <meta name="theme-color" content="#0f172a"> <link rel="apple-touch-icon" href="icon-192.png"> 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
     <style>
         :root {
@@ -211,24 +206,9 @@
         .btn-save { background: var(--hum-color); color: #0f172a; }
         .btn:hover { opacity: 0.9; transform: translateY(-2px); }
 
-        /* --- Стили для скролла в истории --- */
-        .history-scroll-wrapper {
-            width: 100%;
-            overflow-x: auto;
-            overflow-y: hidden;
-            background: rgba(0,0,0,0.1);
-            border-radius: 12px;
-            padding-bottom: 10px;
-        }
-        .history-chart-container {
-            height: 350px;
-            min-width: 100%; /* График будет растягиваться */
-            position: relative;
-        }
-
-        .modal::-webkit-scrollbar, .history-scroll-wrapper::-webkit-scrollbar { height: 8px; width: 6px; }
-        .modal::-webkit-scrollbar-track, .history-scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
-        .modal::-webkit-scrollbar-thumb, .history-scroll-wrapper::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; }
+        .modal::-webkit-scrollbar { width: 6px; }
+        .modal::-webkit-scrollbar-track { background: transparent; }
+        .modal::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; }
 
         @media (max-width: 800px) { .chart-grid { grid-template-columns: 1fr; } }
     </style>
@@ -245,7 +225,7 @@
                 <i class="fas fa-plus"></i>
             </button>
 
-              <select id="station-selector" class="btn-icon" title="Выбрать станцию">
+            <select id="station-selector" class="btn-icon" title="Выбрать станцию">
                 <option value="">Мои станции...</option>
             </select>
 
@@ -255,11 +235,6 @@
             <button id="delete-station-btn" class="btn-icon" title="Удалить станцию" style="display: none;">
                 <i class="fas fa-trash" style="color: #ef4444;"></i>
             </button>
-
-            <button id="history-btn" class="btn-icon" title="История за 3 дня">
-                <i class="fas fa-history"></i>
-            </button>
-
             <button id="settings-btn" class="btn-icon" title="Настройки порогов">
                 <i class="fas fa-sliders-h"></i>
             </button>
@@ -417,40 +392,7 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="history-modal">
-    <div class="modal" style="max-width: 900px; width: 95%;"> 
-        <h2><i class="fas fa-history"></i> История за 3 дня (<span id="history-topic-name"></span>)</h2>
-        <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 20px;">
-            Двигайте ползунок вправо, чтобы просмотреть актуальные данные.
-        </p>
-        
-        <div class="history-scroll-wrapper">
-            <div class="history-chart-container" id="historyChartContainer">
-                <canvas id="historyChartCanvas"></canvas>
-            </div>
-        </div>
-        
-        <div class="modal-actions">
-            <button class="btn btn-cancel" id="close-history">Закрыть</button>
-        </div>
-    </div>
-</div>
-
 <script>
-    // --- ИНИЦИАЛИЗАЦИЯ FIREBASE ---
-    const firebaseConfig = {
-        apiKey: "AIzaSyCmIQEX_WsffgbB0_sMxULlvG4l4ARS_Sg",
-        authDomain: "iot-maicroclimate.firebaseapp.com",
-        databaseURL: "https://iot-maicroclimate-default-rtdb.firebaseio.com",
-        projectId: "iot-maicroclimate",
-        storageBucket: "iot-maicroclimate.firebasestorage.app",
-        messagingSenderId: "547744108406",
-        appId: "1:547744108406:web:e82b63a224b233b6e43457"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
-
     // --- Инициализация кругов SVG ---
     const radius = 60;
     const circumference = 2 * Math.PI * radius;
@@ -477,7 +419,7 @@
         co: { min: 0, max: 30 }
     };
 
-    // UI Модального окна настроек
+    // UI Модального окна
     const modal = document.getElementById('settings-modal');
     const btnSettings = document.getElementById('settings-btn');
     const btnClose = document.getElementById('close-settings');
@@ -642,15 +584,19 @@
     const MQTT_USER = "hivemq.webclient.1771392995052";
     const MQTT_PASS = "e0QH15i6Y#AXv.wtR!%z";
 
+    // Локальное хранилище добавленных станций { "iot/microclimate/ID": "Имя станции" }
     let stations = JSON.parse(localStorage.getItem('iot_saved_stations')) || {};
     const stationSelector = document.getElementById('station-selector');
     const stationIdInput = document.getElementById('new-station-id');
     const addStationBtn = document.getElementById('add-station-btn');
     let currentTopic = localStorage.getItem('iot_last_topic') || "";
 
+    // Отрисовка сохраненных станций в выпадающем списке
+    // Получаем ссылки на новые кнопки
     const editStationBtn = document.getElementById('edit-station-btn');
     const deleteStationBtn = document.getElementById('delete-station-btn');
 
+    // Отрисовка сохраненных станций в выпадающем списке
     function renderStationList() {
         stationSelector.innerHTML = '';
         const keys = Object.keys(stations);
@@ -661,6 +607,7 @@
             opt.innerText = "Добавьте станцию...";
             stationSelector.appendChild(opt);
             
+            // Прячем кнопки, если станций нет
             editStationBtn.style.display = 'none';
             deleteStationBtn.style.display = 'none';
         } else {
@@ -677,6 +624,7 @@
             }
             stationSelector.value = currentTopic;
             
+            // Показываем кнопки
             editStationBtn.style.display = 'flex';
             deleteStationBtn.style.display = 'flex';
         }
@@ -695,6 +643,7 @@
                 document.getElementById('status-dot').className = "dot online";
                 document.getElementById('status-text').innerText = "Онлайн";
                 
+                // Подписываемся на выбранную станцию
                 if (currentTopic) {
                     client.subscribe(currentTopic);
                 }
@@ -712,7 +661,7 @@
         isConnected = false;
         document.getElementById('status-dot').className = "dot offline";
         document.getElementById('status-text').innerText = "Ошибка сети";
-        setTimeout(connectMQTT, 5000); 
+        setTimeout(connectMQTT, 5000); // Попытка переподключиться
     };
 
     client.onMessageArrived = (msg) => {
@@ -726,15 +675,10 @@
             const data = JSON.parse(msg.payloadString);
             const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-            const tempVal = data.temperature || 0;
-            const humVal = data.humidity || 0;
-            const gasVal = data.co2_ppm || 0;
-            const coVal = data.co_ppm || 0;
-
-            history.temp.push(tempVal);
-            history.hum.push(humVal);
-            history.gas.push(gasVal);
-            history.co.push(coVal); 
+            history.temp.push(data.temperature || 0);
+            history.hum.push(data.humidity || 0);
+            history.gas.push(data.co2_ppm || 0);
+            history.co.push(data.co_ppm || 0); 
             history.times.push(now);
 
             if (history.times.length > MAX_POINTS) {
@@ -742,13 +686,10 @@
             }
 
             updateDashboardUI();
-
-            // ВАЖНО: Мы удалили блок отправки в Firebase отсюда!
-            // Теперь записью занимается исключительно сама ESP32.
-
         } catch (e) { console.error("Sensor data parse error:", e); }
     };
 
+    // Функция переключения между станциями (сброс истории и экранов)
     function switchStation(newTopic) {
         const oldTopic = currentTopic;
         currentTopic = newTopic;
@@ -759,8 +700,10 @@
             client.unsubscribe(oldTopic);
         }
 
+        // Очищаем историю графиков
         history = { temp: [], hum: [], gas: [], co: [], times: [] };
         
+        // Сбрасываем UI на прочерки
         document.getElementById('val-temp').innerText = "--";
         document.getElementById('val-hum').innerText = "--";
         document.getElementById('val-gas').innerText = "--";
@@ -789,6 +732,7 @@
         }
     }
 
+    // Кнопка "+" в хеддере для добавления станции по ID
     addStationBtn.addEventListener('click', () => {
         const id = stationIdInput.value.trim().toUpperCase();
         if (!id) return;
@@ -811,11 +755,12 @@
         }
     });
 
+    // Обработка ручной смены в списке
     stationSelector.addEventListener('change', (e) => {
         if (!e.target.value) return;
         switchStation(e.target.value);
     });
-
+// --- ПЕРЕИМЕНОВАНИЕ СТАНЦИИ ---
     editStationBtn.addEventListener('click', () => {
         if (!currentTopic || !stations[currentTopic]) return;
         
@@ -825,133 +770,33 @@
         if (newName && newName.trim() !== "" && newName !== currentName) {
             stations[currentTopic] = newName.trim();
             localStorage.setItem('iot_saved_stations', JSON.stringify(stations));
-            renderStationList(); 
+            renderStationList(); // Обновляем текст в селекторе
         }
     });
 
+    // --- УДАЛЕНИЕ СТАНЦИИ ---
     deleteStationBtn.addEventListener('click', () => {
         if (!currentTopic || !stations[currentTopic]) return;
         
         const confirmDelete = confirm(`Вы уверены, что хотите удалить станцию "${stations[currentTopic]}"?`);
         
         if (confirmDelete) {
+            // 1. Отписываемся от брокера, чтобы данные перестали идти
             if (isConnected) client.unsubscribe(currentTopic);
             
+            // 2. Удаляем из памяти
             delete stations[currentTopic];
             localStorage.setItem('iot_saved_stations', JSON.stringify(stations));
             
+            // 3. Выбираем оставшуюся станцию (или пустоту, если удалили последнюю)
             const remainingKeys = Object.keys(stations);
             const nextTopic = remainingKeys.length > 0 ? remainingKeys[0] : "";
             
+            // 4. Обновляем UI
             renderStationList();
             switchStation(nextTopic); 
         }
     });
-
-    // --- ЛОГИКА ОКНА ИСТОРИИ (3 ДНЯ) ИЗ FIREBASE ---
-    const historyModal = document.getElementById('history-modal');
-    const btnHistory = document.getElementById('history-btn');
-    const btnCloseHistory = document.getElementById('close-history');
-    const historyTopicName = document.getElementById('history-topic-name');
-    const historyChartContainer = document.getElementById('historyChartContainer');
-    let historyChartInstance = null;
-
-    function initHistoryChart() {
-        const ctx = document.getElementById('historyChartCanvas').getContext('2d');
-        if (historyChartInstance) { historyChartInstance.destroy(); }
-
-        historyChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [
-                    { label: 'Температура (°C)', data: [], borderColor: '#fb7185', backgroundColor: 'rgba(251, 113, 133, 0.2)', fill: true, tension: 0.4, borderWidth: 2 },
-                    { label: 'Влажность (%)', data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.2)', fill: true, tension: 0.4, borderWidth: 2 }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false, /* Важно для работы скролла */
-                plugins: { legend: { labels: { color: '#94a3b8' } } },
-                scales: {
-                    x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45 }, grid: { display: false } },
-                    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
-                }
-            }
-        });
-    }
-
-    async function fetch3DayHistory(topic) {
-        // Достаем ID устройства из MQTT топика (например, из "iot/microclimate/A1B2" получаем "A1B2")
-        const deviceId = topic.split('/').pop(); 
-        // Формируем безопасный ID, который мы использовали в коде ESP32 (iot_microclimate_ID)
-        const safeId = "iot_microclimate_" + deviceId; 
-
-        const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
-
-        // Читаем из новой структуры (как в коде ESP32)
-        const snapshot = await database.ref('history/' + safeId)
-            .orderByKey()
-            .startAt(threeDaysAgo.toString())
-            .once('value');
-
-        const historyData = snapshot.val();
-        const labels = [];
-        const tempData = [];
-        const humData = [];
-
-        if (historyData) {
-            Object.keys(historyData).forEach(key => {
-                const record = historyData[key];
-                const time = new Date(parseInt(key));
-                
-                const timeString = `${time.getDate()} ${time.toLocaleString('ru', {month: 'short'})} ${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}`;
-                
-                labels.push(timeString);
-                tempData.push(record.temp);
-                humData.push(record.hum);
-            });
-        }
-
-        return { labels, tempData, humData };
-    }
-
-    btnHistory.addEventListener('click', async () => {
-        if (!currentTopic || !stations[currentTopic]) {
-            alert("Сначала выберите или добавьте станцию!");
-            return;
-        }
-
-        historyModal.style.display = 'flex';
-        historyTopicName.innerText = stations[currentTopic];
-        
-        // Сброс ширины до загрузки
-        historyChartContainer.style.width = '100%'; 
-        initHistoryChart();
-
-        historyChartInstance.data.labels = ['Загрузка...'];
-        historyChartInstance.update();
-
-        try {
-            const data = await fetch3DayHistory(currentTopic);
-            
-            // Вычисляем необходимую ширину: 40px на каждую точку, но не меньше 100% ширины окна
-            const minWidthForPoints = data.labels.length * 40;
-            historyChartContainer.style.width = Math.max(minWidthForPoints, historyChartContainer.parentElement.clientWidth) + 'px';
-
-            historyChartInstance.data.labels = data.labels;
-            historyChartInstance.data.datasets[0].data = data.tempData;
-            historyChartInstance.data.datasets[1].data = data.humData;
-            historyChartInstance.update();
-        } catch (error) {
-            console.error("Ошибка загрузки истории:", error);
-            alert("Не удалось загрузить историю или база данных пуста.");
-        }
-    });
-
-    btnCloseHistory.addEventListener('click', () => { historyModal.style.display = 'none'; });
-
-    // Запуск MQTT
     connectMQTT();
 </script>
 </body>
