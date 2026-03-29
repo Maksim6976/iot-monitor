@@ -162,7 +162,7 @@
 
         .gauge-info { text-align: center; width: 100%; }
         .gauge-title { font-size: 0.9rem; font-weight: 600; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .gauge-prediction { font-size: 0.75rem; color: var(--text-dim); background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 10px; display: inline-block; }
+        .gauge-prediction { font-size: 0.75rem; color: var(--text-dim); background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 10px; display: inline-block; margin-top: 5px; }
         body.light-mode .gauge-prediction { background: rgba(0,0,0,0.05); }
 
         /* --- Charts Grid --- */
@@ -173,7 +173,7 @@
         }
         canvas { max-height: 260px; width: 100%; }
 
-        /* --- Settings Modal --- */
+        /* --- Modals --- */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.7); z-index: 1000;
@@ -198,7 +198,7 @@
             background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
             color: var(--text-main); font-family: 'Inter'; font-size: 1rem; box-sizing: border-box;
         }
-        .input-group input:focus { outline: none; border-color: var(--hum-color); }
+        .input-group input:focus, select.btn-icon:focus { outline: none; border-color: var(--hum-color); }
         
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; }
         .btn { padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; font-weight: 600; font-family: 'Inter'; transition: 0.2s; }
@@ -209,6 +209,12 @@
         .modal::-webkit-scrollbar { width: 6px; }
         .modal::-webkit-scrollbar-track { background: transparent; }
         .modal::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; }
+
+        .forecast-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .forecast-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center; }
+        body.light-mode .forecast-box { background: rgba(0,0,0,0.03); }
+        .forecast-box-title { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 5px; }
+        .forecast-box-val { font-size: 1.5rem; font-weight: bold; }
 
         @media (max-width: 800px) { .chart-grid { grid-template-columns: 1fr; } }
     </style>
@@ -235,6 +241,11 @@
             <button id="delete-station-btn" class="btn-icon" title="Удалить станцию" style="display: none;">
                 <i class="fas fa-trash" style="color: #ef4444;"></i>
             </button>
+            
+            <button id="forecast-btn" class="btn-icon" title="Расширенный прогноз">
+                <i class="fas fa-chart-line" style="color: var(--hum-color);"></i>
+            </button>
+
             <button id="settings-btn" class="btn-icon" title="Настройки порогов">
                 <i class="fas fa-sliders-h"></i>
             </button>
@@ -392,6 +403,48 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="forecast-modal">
+    <div class="modal">
+        <h2><i class="fas fa-chart-line"></i> Расширенный прогноз</h2>
+        <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 20px;">
+            Линейный прогноз на основе текущего тренда (данные раз в 5 сек). Выберите желаемый горизонт времени:
+        </p>
+
+        <div class="input-group">
+            <select id="forecast-time" class="btn-icon" style="width: 100%; justify-content: space-between;">
+                <option value="60">На 5 минут вперед</option>
+                <option value="180">На 15 минут вперед</option>
+                <option value="360">На 30 минут вперед</option>
+                <option value="720">На 1 час вперед</option>
+            </select>
+        </div>
+
+        <div class="forecast-grid">
+            <div class="forecast-box">
+                <div class="forecast-box-title">Температура</div>
+                <div class="forecast-box-val" id="modal-pred-temp" style="color: var(--temp-color);">--</div>
+            </div>
+            <div class="forecast-box">
+                <div class="forecast-box-title">Влажность</div>
+                <div class="forecast-box-val" id="modal-pred-hum" style="color: var(--hum-color);">--</div>
+            </div>
+            <div class="forecast-box">
+                <div class="forecast-box-title">CO2</div>
+                <div class="forecast-box-val" id="modal-pred-gas" style="color: var(--gas-color);">--</div>
+            </div>
+            <div class="forecast-box">
+                <div class="forecast-box-title">Угарный газ</div>
+                <div class="forecast-box-val" id="modal-pred-co" style="color: var(--co-color);">--</div>
+            </div>
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-cancel" id="close-forecast">Закрыть</button>
+            <button class="btn btn-save" id="apply-forecast">Применить</button>
+        </div>
+    </div>
+</div>
+
 <script>
     // --- Инициализация кругов SVG ---
     const radius = 60;
@@ -419,7 +472,11 @@
         co: { min: 0, max: 30 }
     };
 
-    // UI Модального окна
+    // --- Настройки прогноза ---
+    let currentForecastPoints = parseInt(localStorage.getItem('iot_forecast_time')) || 60;
+    const forecastLabels = { 60: '5м', 180: '15м', 360: '30м', 720: '1ч' };
+
+    // UI Модального окна настроек
     const modal = document.getElementById('settings-modal');
     const btnSettings = document.getElementById('settings-btn');
     const btnClose = document.getElementById('close-settings');
@@ -477,7 +534,8 @@
 
     // --- Данные ---
     let history = { temp: [], hum: [], gas: [], co: [], times: [] };
-    const MAX_POINTS = 20;
+    // Храним 120 точек (это ровно 10 минут истории при отправке каждые 5 сек)
+    const MAX_POINTS = 120;
 
     // --- Графики ---
     const createChart = (id, label, color) => {
@@ -493,7 +551,7 @@
                 datasets: [{ 
                     label: label, data: [], borderColor: color, backgroundColor: gradient, 
                     fill: true, tension: 0.4, borderWidth: 2.5,
-                    pointBackgroundColor: '#0f172a', pointBorderColor: color, pointRadius: 3 
+                    pointBackgroundColor: '#0f172a', pointBorderColor: color, pointRadius: 1 
                 }] 
             },
             options: {
@@ -515,15 +573,67 @@
         co: createChart('coChart', 'Угарный газ (ppm)', '#a855f7')
     };
 
-    function predictValue(dataArray) {
-        if (dataArray.length < 5) return null;
+    // --- ПРОГНОЗ: Логика ---
+    // futurePoints рассчитывается из расчета 1 точка = 5 секунд
+    function predictValue(dataArray, futurePoints = 60) {
+        if (dataArray.length < 5) return null; // Ждем минимум 5 точек для старта
         const n = dataArray.length;
         let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
         for (let i = 0; i < n; i++) { sumX += i; sumY += dataArray[i]; sumXY += i * dataArray[i]; sumXX += i * i; }
         const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
         const intercept = (sumY - slope * sumX) / n;
-        return (slope * (n + 60) + intercept).toFixed(1);
+        
+        let predicted = slope * (n + futurePoints) + intercept;
+        return Math.max(0, predicted).toFixed(1);
     }
+
+    // Управление окном прогноза
+    const forecastModal = document.getElementById('forecast-modal');
+    const btnForecast = document.getElementById('forecast-btn');
+    const btnCloseForecast = document.getElementById('close-forecast');
+    const btnApplyForecast = document.getElementById('apply-forecast');
+    const forecastTimeSelect = document.getElementById('forecast-time');
+
+    // Устанавливаем сохраненное значение при старте
+    forecastTimeSelect.value = currentForecastPoints;
+
+    function updateModalForecast() {
+        if (history.times.length === 0) return;
+        
+        const points = parseInt(forecastTimeSelect.value);
+        const lastIdx = history.times.length - 1;
+        const latestVals = { temp: history.temp[lastIdx], hum: history.hum[lastIdx], gas: history.gas[lastIdx], co: history.co[lastIdx] };
+
+        ['temp', 'hum', 'gas', 'co'].forEach(key => {
+            const pred = predictValue(history[key], points);
+            const el = document.getElementById(`modal-pred-${key}`);
+            if (pred && el) {
+                const icon = pred > latestVals[key] ? '↑' : '↓';
+                el.innerText = `${icon} ${pred}`;
+            } else if (el) {
+                el.innerText = "--";
+            }
+        });
+    }
+
+    btnForecast.addEventListener('click', () => { 
+        forecastTimeSelect.value = currentForecastPoints; // Сброс селекта на текущее активное время
+        updateModalForecast(); 
+        forecastModal.style.display = 'flex'; 
+    });
+    
+    btnCloseForecast.addEventListener('click', () => forecastModal.style.display = 'none');
+    
+    // Пересчет внутри окна при изменении селекта
+    forecastTimeSelect.addEventListener('change', updateModalForecast);
+
+    // Применение прогноза к главному экрану
+    btnApplyForecast.addEventListener('click', () => {
+        currentForecastPoints = parseInt(forecastTimeSelect.value);
+        localStorage.setItem('iot_forecast_time', currentForecastPoints);
+        updateDashboardUI(); // Принудительно обновляем карточки
+        forecastModal.style.display = 'none'; // Закрываем окно
+    });
 
     function checkAlerts(currentValues) {
         const cards = { temp: document.getElementById('card-temp'), hum: document.getElementById('card-hum'), gas: document.getElementById('card-gas'), co: document.getElementById('card-co') };
@@ -568,13 +678,21 @@
             charts[key].data.labels = history.times;
             charts[key].data.datasets[0].data = history[key];
             charts[key].update();
-            const pred = predictValue(history[key]);
+            
+            // Динамический прогноз на карточках (зависит от выбора в настройках)
+            const pred = predictValue(history[key], currentForecastPoints);
             const predEl = document.getElementById(`pred-${key}`);
             if (pred && predEl) {
                 const icon = pred > values[key] ? '↑' : '↓';
-                predEl.innerText = `${icon} Прогноз: ${pred}`;
+                // Подставляем красивый ярлык времени из нашего объекта forecastLabels
+                predEl.innerText = `${icon} Прогноз (${forecastLabels[currentForecastPoints]}): ${pred}`;
             }
         });
+
+        // Динамическое обновление модалки прогноза, если она открыта
+        if (forecastModal.style.display === 'flex') {
+            updateModalForecast();
+        }
     }
 
     // --- MQTT & UNIQUE ID CONNECTION LOGIC ---
@@ -591,8 +709,6 @@
     const addStationBtn = document.getElementById('add-station-btn');
     let currentTopic = localStorage.getItem('iot_last_topic') || "";
 
-    // Отрисовка сохраненных станций в выпадающем списке
-    // Получаем ссылки на новые кнопки
     const editStationBtn = document.getElementById('edit-station-btn');
     const deleteStationBtn = document.getElementById('delete-station-btn');
 
@@ -607,7 +723,6 @@
             opt.innerText = "Добавьте станцию...";
             stationSelector.appendChild(opt);
             
-            // Прячем кнопки, если станций нет
             editStationBtn.style.display = 'none';
             deleteStationBtn.style.display = 'none';
         } else {
@@ -624,7 +739,6 @@
             }
             stationSelector.value = currentTopic;
             
-            // Показываем кнопки
             editStationBtn.style.display = 'flex';
             deleteStationBtn.style.display = 'flex';
         }
@@ -643,7 +757,6 @@
                 document.getElementById('status-dot').className = "dot online";
                 document.getElementById('status-text').innerText = "Онлайн";
                 
-                // Подписываемся на выбранную станцию
                 if (currentTopic) {
                     client.subscribe(currentTopic);
                 }
@@ -668,7 +781,8 @@
         if (msg.destinationName !== currentTopic) return;
 
         const currentTime = Date.now();
-        if (currentTime - lastUpdateTime < 2000) return;
+        // Защита от дублей. Теперь стоит 4500 мс, чтобы данные стабильно принимались раз в 5 сек.
+        if (currentTime - lastUpdateTime < 4500) return;
         lastUpdateTime = currentTime;
 
         try {
@@ -732,7 +846,6 @@
         }
     }
 
-    // Кнопка "+" в хеддере для добавления станции по ID
     addStationBtn.addEventListener('click', () => {
         const id = stationIdInput.value.trim().toUpperCase();
         if (!id) return;
@@ -755,12 +868,11 @@
         }
     });
 
-    // Обработка ручной смены в списке
     stationSelector.addEventListener('change', (e) => {
         if (!e.target.value) return;
         switchStation(e.target.value);
     });
-// --- ПЕРЕИМЕНОВАНИЕ СТАНЦИИ ---
+
     editStationBtn.addEventListener('click', () => {
         if (!currentTopic || !stations[currentTopic]) return;
         
@@ -770,33 +882,29 @@
         if (newName && newName.trim() !== "" && newName !== currentName) {
             stations[currentTopic] = newName.trim();
             localStorage.setItem('iot_saved_stations', JSON.stringify(stations));
-            renderStationList(); // Обновляем текст в селекторе
+            renderStationList(); 
         }
     });
 
-    // --- УДАЛЕНИЕ СТАНЦИИ ---
     deleteStationBtn.addEventListener('click', () => {
         if (!currentTopic || !stations[currentTopic]) return;
         
         const confirmDelete = confirm(`Вы уверены, что хотите удалить станцию "${stations[currentTopic]}"?`);
         
         if (confirmDelete) {
-            // 1. Отписываемся от брокера, чтобы данные перестали идти
             if (isConnected) client.unsubscribe(currentTopic);
             
-            // 2. Удаляем из памяти
             delete stations[currentTopic];
             localStorage.setItem('iot_saved_stations', JSON.stringify(stations));
             
-            // 3. Выбираем оставшуюся станцию (или пустоту, если удалили последнюю)
             const remainingKeys = Object.keys(stations);
             const nextTopic = remainingKeys.length > 0 ? remainingKeys[0] : "";
             
-            // 4. Обновляем UI
             renderStationList();
             switchStation(nextTopic); 
         }
     });
+    
     connectMQTT();
 </script>
 </body>
